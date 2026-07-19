@@ -97,13 +97,38 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| (populated by roadmap) | | |
+| ENVR-01 | Phase 1 | Pending |
+| DATA-02 | Phase 1 | Pending |
+| DISC-01 | Phase 1 | Pending |
+| DATA-01 | Phase 2 | Pending |
+| DATA-04 | Phase 2 | Pending |
+| PIPE-01 | Phase 2 | Pending |
+| PIPE-02 | Phase 2 | Pending |
+| PIPE-03 | Phase 2 | Pending |
+| PIPE-04 | Phase 2 | Pending |
+| PIPE-05 | Phase 2 | Pending |
+| QUAL-01 | Phase 3 | Pending |
+| DATA-03 | Phase 4 | Pending |
+| DATA-05 | Phase 4 | Pending |
+| PIPE-06 | Phase 4 | Pending |
+| PIPE-07 | Phase 4 | Pending |
+| QUAL-02 | Phase 4 | Pending |
+| SKIL-01 | Phase 5 | Pending |
+| SKIL-02 | Phase 5 | Pending |
+| SKIL-03 | Phase 5 | Pending |
+| AUTO-01 | Phase 5 | Pending |
+| AUTO-02 | Phase 5 | Pending |
+| CACH-01 | Phase 6 | Pending |
+| CACH-02 | Phase 6 | Pending |
+| CACH-03 | Phase 6 | Pending |
+| DISC-02 | Phase 7 | Pending |
+| DISC-03 | Phase 7 | Pending |
 
 **Coverage:**
 - v1 requirements: 26 total
-- Mapped to phases: 0
-- Unmapped: 26 ⚠️
+- Mapped to phases: 26
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-07-19*
-*Last updated: 2026-07-19 after initial definition*
+*Last updated: 2026-07-19 after roadmap creation (traceability populated)*
