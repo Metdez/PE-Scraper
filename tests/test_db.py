@@ -239,3 +239,86 @@ def test_stale_firms_surfaces_old_and_never_checked(tmp_path) -> None:
         assert "https://recent.example" not in stale
     finally:
         conn.close()
+
+
+# --------------------------------------------------------------------------- #
+# Task 1 (02-02) — get_firm: read a FirmRecord back by website
+# --------------------------------------------------------------------------- #
+
+
+def test_get_firm_returns_none_for_missing_website(tmp_path) -> None:
+    from pescraper.db import connect, get_firm, init_db
+
+    db_path = tmp_path / "pipeline.db"
+    init_db(db_path)
+    conn = connect(db_path)
+    try:
+        assert get_firm(conn, "https://no-such-firm.example") is None
+    finally:
+        conn.close()
+
+
+def test_get_firm_round_trips_fully_populated_record(tmp_path) -> None:
+    from pescraper.db import connect, get_firm, init_db, upsert_firm
+    from pescraper.models import FirmRecord, FirmStatus
+
+    db_path = tmp_path / "pipeline.db"
+    init_db(db_path)
+    conn = connect(db_path)
+    try:
+        record = FirmRecord(
+            firm_name="Acme Capital",
+            type="Buyout",
+            state="NY",
+            city="New York",
+            website="https://acme.example",
+            us_investments=42,
+            rev_min_musd=10.0,
+            rev_max_musd=100.0,
+            ebitda_min_musd=2.0,
+            ebitda_max_musd=20.0,
+            ev_min_musd=5.0,
+            ev_max_musd=50.0,
+            check_min_musd=1.0,
+            check_max_musd=25.0,
+            deal_types="Buyout,Growth Equity",
+            sector_tier1="Industrials",
+            aum_musd=500.0,
+            activity="Active",
+            last_deal="2026-01-01",
+            fund_name="Acme Fund III",
+            confidence=0.85,
+            needs_review=True,
+            last_checked="2026-07-19T00:00:00+00:00",
+            status=FirmStatus.NEEDS_REVIEW,
+        )
+        upsert_firm(conn, record)
+
+        result = get_firm(conn, "https://acme.example")
+        assert result == record
+        assert isinstance(result.status, FirmStatus)
+        assert isinstance(result.needs_review, bool)
+    finally:
+        conn.close()
+
+
+def test_get_firm_round_trips_minimal_record_nulls_stay_none(tmp_path) -> None:
+    from pescraper.db import connect, get_firm, init_db, upsert_firm
+    from pescraper.models import FirmRecord, FirmStatus
+
+    db_path = tmp_path / "pipeline.db"
+    init_db(db_path)
+    conn = connect(db_path)
+    try:
+        record = FirmRecord(firm_name="Minimal Firm", website="https://minimal.example")
+        upsert_firm(conn, record)
+
+        result = get_firm(conn, "https://minimal.example")
+        assert result == record
+        assert result.rev_min_musd is None
+        assert result.ebitda_max_musd is None
+        assert result.deal_types is None
+        assert result.needs_review is False
+        assert result.status is FirmStatus.PENDING
+    finally:
+        conn.close()
