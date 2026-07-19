@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import os
 import sqlite3
+from datetime import datetime, timezone
 from pathlib import Path
 
 from pescraper.models import FIRM_COLUMNS, FirmRecord, FirmStatus
@@ -246,6 +247,52 @@ def advance_status(
     conn.commit()
 
 
+def insert_extraction(
+    conn: sqlite3.Connection,
+    *,
+    firm_website: str,
+    field: str,
+    value: str | None,
+    quote: str | None,
+    source_page_url: str | None,
+    model: str,
+    prompt_version: str,
+    content_hash: str | None,
+) -> None:
+    """Append one provenance row to ``extractions`` for a single extracted field.
+
+    Append-only log (not an upsert): one row per extraction run per field, per
+    CONTEXT.md's provenance requirement. ``source_page_url``/``quote`` may be
+    None (an unmatched/unverified field) — the row itself is still persisted
+    as the record that this field's provenance couldn't be verified.
+    Commits the transaction (crash-safe per-row write).
+    """
+    created_at = datetime.now(timezone.utc).isoformat()
+    conn.execute(
+        """
+        INSERT INTO extractions (
+            firm_website, source_page_url, field, value, quote,
+            model, prompt_version, content_hash, created_at
+        ) VALUES (
+            :firm_website, :source_page_url, :field, :value, :quote,
+            :model, :prompt_version, :content_hash, :created_at
+        )
+        """,
+        {
+            "firm_website": firm_website,
+            "source_page_url": source_page_url,
+            "field": field,
+            "value": value,
+            "quote": quote,
+            "model": model,
+            "prompt_version": prompt_version,
+            "content_hash": content_hash,
+            "created_at": created_at,
+        },
+    )
+    conn.commit()
+
+
 def stale_firms(conn: sqlite3.Connection, days: int = 90) -> list[str]:
     """Return websites of firms whose last_checked is null or older than ``days``.
 
@@ -271,6 +318,7 @@ __all__ = [
     "init_db",
     "upsert_firm",
     "get_firm",
+    "insert_extraction",
     "advance_status",
     "stale_firms",
 ]
