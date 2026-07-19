@@ -322,3 +322,139 @@ def test_get_firm_round_trips_minimal_record_nulls_stay_none(tmp_path) -> None:
         assert result.status is FirmStatus.PENDING
     finally:
         conn.close()
+
+
+# --------------------------------------------------------------------------- #
+# Task 2 (02-02) — insert_extraction: one provenance row per extracted field
+# --------------------------------------------------------------------------- #
+
+
+def test_insert_extraction_adds_one_row_with_matching_columns(tmp_path) -> None:
+    from pescraper.db import connect, init_db, insert_extraction
+
+    db_path = tmp_path / "pipeline.db"
+    init_db(db_path)
+    conn = connect(db_path)
+    try:
+        insert_extraction(
+            conn,
+            firm_website="https://acme.example",
+            field="ebitda_min_musd",
+            value="2.0",
+            quote="EBITDA of $2M to $20M",
+            source_page_url="https://acme.example/criteria",
+            model="qwen3:4b",
+            prompt_version="v1",
+            content_hash="abc123",
+        )
+
+        rows = conn.execute("SELECT * FROM extractions").fetchall()
+        assert len(rows) == 1
+        row = rows[0]
+        assert row["firm_website"] == "https://acme.example"
+        assert row["field"] == "ebitda_min_musd"
+        assert row["value"] == "2.0"
+        assert row["quote"] == "EBITDA of $2M to $20M"
+        assert row["source_page_url"] == "https://acme.example/criteria"
+        assert row["model"] == "qwen3:4b"
+        assert row["prompt_version"] == "v1"
+        assert row["content_hash"] == "abc123"
+        assert row["created_at"]
+    finally:
+        conn.close()
+
+
+def test_insert_extraction_allows_null_source_page_url_and_quote(tmp_path) -> None:
+    from pescraper.db import connect, init_db, insert_extraction
+
+    db_path = tmp_path / "pipeline.db"
+    init_db(db_path)
+    conn = connect(db_path)
+    try:
+        insert_extraction(
+            conn,
+            firm_website="https://acme.example",
+            field="fund_name",
+            value=None,
+            quote=None,
+            source_page_url=None,
+            model="qwen3:4b",
+            prompt_version="v1",
+            content_hash=None,
+        )
+
+        rows = conn.execute("SELECT * FROM extractions").fetchall()
+        assert len(rows) == 1
+        assert rows[0]["source_page_url"] is None
+        assert rows[0]["quote"] is None
+        assert rows[0]["value"] is None
+    finally:
+        conn.close()
+
+
+def test_insert_extraction_is_append_only_not_upsert(tmp_path) -> None:
+    from pescraper.db import connect, init_db, insert_extraction
+
+    db_path = tmp_path / "pipeline.db"
+    init_db(db_path)
+    conn = connect(db_path)
+    try:
+        for _ in range(2):
+            insert_extraction(
+                conn,
+                firm_website="https://acme.example",
+                field="ebitda_min_musd",
+                value="2.0",
+                quote="EBITDA of $2M",
+                source_page_url="https://acme.example/criteria",
+                model="qwen3:4b",
+                prompt_version="v1",
+                content_hash="abc123",
+            )
+
+        rows = conn.execute(
+            "SELECT * FROM extractions WHERE firm_website = ? AND field = ?",
+            ("https://acme.example", "ebitda_min_musd"),
+        ).fetchall()
+        assert len(rows) == 2
+    finally:
+        conn.close()
+
+
+def test_insert_extraction_sql_metacharacter_values_round_trip_as_data(tmp_path) -> None:
+    """T-02-03: SQL-metacharacter-laden values must round-trip as plain data."""
+    from pescraper.db import connect, init_db, insert_extraction
+
+    db_path = tmp_path / "pipeline.db"
+    init_db(db_path)
+    conn = connect(db_path)
+    try:
+        malicious_value = "5.0'; DROP TABLE extractions; --"
+        malicious_quote = "Robert'); DROP TABLE firms;--"
+        insert_extraction(
+            conn,
+            firm_website="https://acme.example",
+            field="ebitda_min_musd",
+            value=malicious_value,
+            quote=malicious_quote,
+            source_page_url="https://acme.example/criteria",
+            model="qwen3:4b",
+            prompt_version="v1",
+            content_hash="abc123",
+        )
+
+        # Both tables must still exist and contain the literal string as data.
+        tables = {
+            r[0]
+            for r in conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table'"
+            ).fetchall()
+        }
+        assert "extractions" in tables
+        assert "firms" in tables
+
+        row = conn.execute("SELECT * FROM extractions").fetchone()
+        assert row["value"] == malicious_value
+        assert row["quote"] == malicious_quote
+    finally:
+        conn.close()
