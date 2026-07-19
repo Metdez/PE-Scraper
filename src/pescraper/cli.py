@@ -27,7 +27,9 @@ tests can monkeypatch each target module's attributes directly (the lazy
 
 from __future__ import annotations
 
+import json
 import logging
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 import typer
@@ -90,9 +92,13 @@ async def _run_firm_async(url: str, conn: "sqlite3.Connection") -> "tuple[FirmRe
     """
     from datetime import datetime, timezone
 
-    from pescraper import confidence, crawl, db, decongest, extract, merge, models, provenance
+    from pescraper import cache, confidence, crawl, db, decongest, merge, models, provenance
 
-    pages = await crawl.select_pages(url)
+    pages = cache.get_cached_pages(conn, url)
+    if pages is None:
+        pages = await crawl.select_pages(url)
+        if pages:
+            cache.put_cached_pages(conn, url, pages)
 
     if not pages:
         logger.warning("needs_review: no_criteria_page (%s)", url)
@@ -104,8 +110,7 @@ async def _run_firm_async(url: str, conn: "sqlite3.Connection") -> "tuple[FirmRe
         )
         return record, []
 
-    financial = await extract.extract_financial(pages)
-    categorical = await extract.extract_categorical(pages)
+    financial, categorical = await cache.extract_cached(conn, pages)
 
     provenance_rows: list[dict] = []
     quote_sources = (
@@ -114,11 +119,13 @@ async def _run_firm_async(url: str, conn: "sqlite3.Connection") -> "tuple[FirmRe
     )
     for source, quote_map, prompt_version in quote_sources:
         for quote_field, value_field in quote_map.items():
-            quote_value = getattr(source, quote_field, None)
-            if not quote_value:
-                continue
             value = getattr(source, value_field, None)
-            source_page_url = provenance.find_source_page(quote_value, pages)
+            if value is None:
+                continue
+            quote_value = getattr(source, quote_field, None)
+            source_page_url = (
+                provenance.find_source_page(quote_value, pages) if quote_value else None
+            )
             provenance_rows.append(
                 {
                     "field": value_field,
@@ -188,10 +195,57 @@ async def _run_firm_async(url: str, conn: "sqlite3.Connection") -> "tuple[FirmRe
     return merged, provenance_rows
 
 
+def _write_provenance(conn: "sqlite3.Connection", url: str, rows: list[dict]) -> None:
+    from pescraper import db
+
+    for row in rows:
+        db.insert_extraction(
+            conn,
+            firm_website=url,
+            field=row["field"],
+            value=row["value"],
+            quote=row["quote"],
+            source_page_url=row["source_page_url"],
+            model="qwen3:4b",
+            prompt_version=row["prompt_version"],
+            content_hash=row["content_hash"],
+        )
+
+
 @app.command()
-def run() -> None:
-    """Run the batch pipeline over the queued firms (Phase 1 skeleton)."""
-    typer.echo("pescraper run: Phase 1 skeleton — batch pipeline lands in a later phase.")
+def run(
+    slug: str | None = typer.Option(None, help="Queue one firm URL at urgent priority."),
+    limit: int | None = typer.Option(None, min=1, help="Maximum firms to process."),
+    summary: bool = typer.Option(False, help="Show queue counts without processing."),
+    csv_path: Path | None = typer.Option(None, "--csv", exists=True, help="Seed firms from CSV."),
+) -> None:
+    """Run queued firms with per-firm commits and failure isolation."""
+    import asyncio
+
+    from pescraper import db, ingest, queue, worker
+
+    db.init_db()
+    conn = db.connect()
+    try:
+        if csv_path:
+            ingest.ingest_csv(csv_path, conn)
+            for row in conn.execute("SELECT website FROM firms WHERE website IS NOT NULL"):
+                queue.enqueue(conn, row["website"])
+        if slug:
+            queue.enqueue(conn, slug, priority=0)
+        if summary:
+            typer.echo(json.dumps(queue.queue_summary(conn), sort_keys=True))
+            return
+
+        def processor(url: str) -> "FirmRecord":
+            record, provenance_rows = asyncio.run(_run_firm_async(url, conn))
+            _write_provenance(conn, url, provenance_rows)
+            return record
+
+        result = worker.run_batch(conn, processor, limit=limit)
+        typer.echo(f"completed={result.completed} failed={result.failed}")
+    finally:
+        conn.close()
 
 
 @app.command("run-firm")
@@ -206,18 +260,7 @@ def run_firm(url: str = typer.Argument(..., help="Firm website URL to research."
     try:
         record, provenance_rows = asyncio.run(_run_firm_async(url, conn))
         db.upsert_firm(conn, record)
-        for row in provenance_rows:
-            db.insert_extraction(
-                conn,
-                firm_website=url,
-                field=row["field"],
-                value=row["value"],
-                quote=row["quote"],
-                source_page_url=row["source_page_url"],
-                model="qwen3:4b",
-                prompt_version=row["prompt_version"],
-                content_hash=row["content_hash"],
-            )
+        _write_provenance(conn, url, provenance_rows)
     finally:
         conn.close()
 
@@ -230,15 +273,134 @@ def run_firm(url: str = typer.Argument(..., help="Firm website URL to research."
 
 
 @app.command()
-def export() -> None:
-    """Export the dataset to Excel/CSV (Phase 1 skeleton)."""
-    typer.echo("pescraper export: Phase 1 skeleton — export lands in a later phase.")
+def export(output: Path = typer.Option(Path("data/exports/firms"), help="Output path without suffix.")) -> None:
+    """Export the dataset to styled Excel and UTF-8 CSV."""
+    from pescraper import db
+    from pescraper.exporter import export_dataset
+
+    db.init_db()
+    conn = db.connect()
+    try:
+        csv_path, xlsx_path = export_dataset(conn, output)
+    finally:
+        conn.close()
+    typer.echo(f"csv={csv_path} xlsx={xlsx_path}")
 
 
 @app.command()
 def status() -> None:
-    """Show pipeline/queue status (Phase 1 skeleton)."""
-    typer.echo("pescraper status: Phase 1 skeleton — status reporting lands in a later phase.")
+    """Show queue and firm lifecycle counts."""
+    from pescraper import db
+    from pescraper.queue import queue_summary
+
+    db.init_db()
+    conn = db.connect()
+    try:
+        firms = {
+            row["status"]: row["count"]
+            for row in conn.execute("SELECT status, COUNT(*) count FROM firms GROUP BY status")
+        }
+        payload = {"jobs": queue_summary(conn), "firms": firms}
+    finally:
+        conn.close()
+    typer.echo(json.dumps(payload, sort_keys=True))
+
+
+@app.command()
+def benchmark(fixture: Path = typer.Argument(..., exists=True)) -> None:
+    """Score a hand-verified JSONL fixture and print per-field accuracy."""
+    from pescraper.benchmark import evaluate_cases, load_cases
+
+    report = evaluate_cases(load_cases(fixture))
+    typer.echo(json.dumps(report.as_dict(), indent=2, sort_keys=True))
+
+
+@app.command()
+def heartbeat(limit: int | None = typer.Option(None, min=1)) -> None:
+    """Process queued and stale firms; exit before model work when idle."""
+    import asyncio
+
+    from pescraper import automation, db
+
+    db.init_db()
+    conn = db.connect()
+    try:
+        def processor(url: str) -> "FirmRecord":
+            record, provenance_rows = asyncio.run(_run_firm_async(url, conn))
+            _write_provenance(conn, url, provenance_rows)
+            return record
+
+        result = automation.heartbeat(conn, processor, limit=limit)
+    finally:
+        conn.close()
+    typer.echo(
+        json.dumps(
+            {"completed": result.completed, "failed": result.failed, "skipped": result.skipped}
+        )
+    )
+
+
+@app.command("research")
+def research_firm(name_or_url: str) -> None:
+    """Print one stored firm's complete criteria record."""
+    from pescraper import db
+    from pescraper.dataset import find_firm, format_firm
+
+    db.init_db()
+    conn = db.connect()
+    try:
+        record = find_firm(conn, name_or_url)
+    finally:
+        conn.close()
+    if record is None:
+        raise typer.BadParameter(f"Firm not found: {name_or_url}")
+    typer.echo(format_firm(record))
+
+
+@app.command("ask")
+def ask_dataset(
+    ebitda_min: float | None = typer.Option(None),
+    ebitda_max: float | None = typer.Option(None),
+    deal_type: str | None = typer.Option(None),
+    sector: str | None = typer.Option(None),
+) -> None:
+    """Query firms by structured investment criteria."""
+    from pescraper import db
+    from pescraper.dataset import search_firms
+
+    db.init_db()
+    conn = db.connect()
+    try:
+        records = search_firms(
+            conn,
+            ebitda_min=ebitda_min,
+            ebitda_max=ebitda_max,
+            deal_type=deal_type,
+            sector=sector,
+        )
+    finally:
+        conn.close()
+    for record in records:
+        typer.echo(f"{record.firm_name}\t{record.website}")
+
+
+@app.command("discover")
+def discover(
+    query: str = typer.Option("US private equity firm investment criteria"),
+    searx_url: str = typer.Option("http://localhost:8080"),
+) -> None:
+    """Discover and queue new PE firms through a SearXNG JSON endpoint."""
+    from pescraper import db
+    from pescraper.discovery import SearxClient, discover_firms
+
+    results = SearxClient(searx_url).search(query)
+    db.init_db()
+    conn = db.connect()
+    try:
+        firms = discover_firms(conn, results)
+    finally:
+        conn.close()
+    typer.echo(f"discovered={len(firms)}")
 
 
 @app.command()

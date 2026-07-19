@@ -14,12 +14,12 @@ Seven phases take a raw Capital IQ CSV of ~5,000 PE firm URLs to a self-updating
 Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Environment & Contract Foundation** - Verified Windows-native runtime (Windows Python 3.11 + Ollama/qwen3:4b + Crawl4AI/Playwright) plus the pipeline.db SQLite contract and CLI skeleton (completed 2026-07-19)
-- [ ] **Phase 2: Core Pipeline, Single Firm** - One firm URL runs end-to-end: page selection → decongestion → qwen3:4b extraction → merged 24-column row with provenance and confidence
-- [ ] **Phase 3: Accuracy Benchmark** - Hand-verified sample harness reporting per-field match rate; the v1 acceptance gate and permanent regression suite
-- [ ] **Phase 4: Queue, Worker & Crash-Safe Batch** - Detached worker with atomic claims, per-firm commits, resume-on-rerun, failure logging, and Excel/CSV export
-- [ ] **Phase 5: nanoclaw Skills & Heartbeats** - Batch, research-firm, and ask-dataset chat skills plus gated scheduled heartbeats for unattended runs
-- [ ] **Phase 6: Caching Layer** - Three-tier cache (content-hash crawl skip, extraction memoization, prefix-stable prompts) so refresh runs cost near zero
-- [ ] **Phase 7: Discovery & URL Recovery** - SearXNG finds new US PE firms, dedupes, queues them; dead firm URLs get resolved and recovered
+- [x] **Phase 2: Core Pipeline, Single Firm** - One firm URL runs end-to-end: page selection → decongestion → qwen3:4b extraction → merged 24-column row with provenance and confidence (completed 2026-07-19)
+- [x] **Phase 3: Accuracy Benchmark** - Completed 2026-07-19
+- [x] **Phase 4: Queue, Worker & Crash-Safe Batch** - Completed 2026-07-19
+- [x] **Phase 5: nanoclaw Skills & Heartbeats** - Completed 2026-07-19
+- [x] **Phase 6: Caching Layer** - Completed 2026-07-19
+- [x] **Phase 7: Discovery & URL Recovery** - Completed 2026-07-19
 
 ## Phase Details
 
@@ -55,15 +55,16 @@ Research note: Windows-native pivot (2026-07-19) — pipeline, Ollama, Crawl4AI/
   4. Confidence is computed in code from field-population counts (never LLM self-report), and sparse rows are flagged Needs Review
   5. Capital IQ CSV ingest seeds the store with regex first-pass values before any LLM call, and merge rules hold: extracted non-null wins, null never overwrites a confirmed value, seed conflicts are flagged Needs Review
 
-**Plans**: 6 plans
+**Plans**: 6/6 plans complete
 
 Plans:
-- [ ] 02-01-PLAN.md — Business rules: merge.py, confidence.py, provenance.py (DATA-04, PIPE-04, PIPE-05)
-- [ ] 02-02-PLAN.md — db.py extensions: get_firm(), insert_extraction() (PIPE-05)
-- [ ] 02-03-PLAN.md — Adaptive crawl, skip-list/403 fallback & manual decongestion (PIPE-01, PIPE-02)
-- [ ] 02-04-PLAN.md — Field-group extraction schemas, prompts & Ollama calls (PIPE-03)
-- [ ] 02-05-PLAN.md — Capital IQ CSV ingest & seed merge (DATA-01)
-- [ ] 02-06-PLAN.md — Integration: wire run-firm end-to-end + live smoke-test checkpoint (DATA-04, PIPE-01..05)
+
+- [x] 02-01-PLAN.md — Business rules: merge.py, confidence.py, provenance.py (DATA-04, PIPE-04, PIPE-05)
+- [x] 02-02-PLAN.md — db.py extensions: get_firm(), insert_extraction() (PIPE-05)
+- [x] 02-03-PLAN.md — Adaptive crawl, skip-list/403 fallback & manual decongestion (PIPE-01, PIPE-02)
+- [x] 02-04-PLAN.md — Field-group extraction schemas, prompts & Ollama calls (PIPE-03)
+- [x] 02-05-PLAN.md — Capital IQ CSV ingest & seed merge (DATA-01)
+- [x] 02-06-PLAN.md — Integration: wire run-firm end-to-end + live smoke-test checkpoint (DATA-04, PIPE-01..05)
 
 ### Phase 3: Accuracy Benchmark
 
@@ -76,7 +77,9 @@ Plans:
   2. Page-selection accuracy is reported separately from extraction accuracy, so the two failure modes are distinguishable
   3. Re-running the harness after any prompt or model change shows whether accuracy moved — it functions as a pytest regression suite, not a one-off script
 
-**Plans**: TBD
+**Plans**: 1/1 complete
+
+- [x] 03-01-PLAN.md — JSONL benchmark, per-field and page-selection scoring (QUAL-01)
 
 ### Phase 4: Queue, Worker & Crash-Safe Batch
 
@@ -91,7 +94,9 @@ Plans:
   4. A priority-0 job enqueued during a running batch is claimed next (interactive requests preempt batch work)
   5. A ~50-firm sample batch runs unattended to completion and exports a populated, color-coded Excel workbook (with summary sheet) and CSV
 
-**Plans**: TBD
+**Plans**: 1/1 complete
+
+- [x] 04-01-PLAN.md — Atomic queue, crash-safe worker, CLI controls, CSV/XLSX export
 
 ### Phase 5: nanoclaw Skills & Heartbeats
 
@@ -106,7 +111,9 @@ Plans:
   4. Scheduled heartbeats process queued and stale firms unattended, and a script gate skips agent wake entirely when the queue is empty (zero tokens on idle sweeps)
   5. Heartbeat errors are logged and surfaced in chat/status output — the loop never crashes and never silently corrupts the dataset
 
-**Plans**: TBD
+**Plans**: 1/1 complete
+
+- [x] 05-01-PLAN.md — NanoClaw group adapter, dataset queries, gated Windows heartbeat
 
 Research note: Needs fresh research at plan time — nanoclaw is young and fast-moving. Re-verify skill authoring, scheduled-task and script-gate specifics, and egress-lockdown/Ollama connectivity against the then-current pinned version. Keep skills thin: the pipeline must remain fully operable via CLI with nanoclaw stopped.
 
@@ -124,7 +131,9 @@ Windows-native pivot (2026-07-19): nanoclaw's WSL2 requirement makes it the leas
   3. Prompts assemble prefix-stable (shared system/schema prefix, per-firm suffix), and the Ollama KV-reuse benefit is measured, not assumed
   4. Bumping `prompt_version` invalidates affected cache entries, blocked/JS-shell content is never cached, and the Phase 3 benchmark still passes with caching enabled
 
-**Plans**: TBD
+**Plans**: 1/1 complete
+
+- [x] 06-01-PLAN.md — Page/extraction caches, invalidation, poison guards
 
 Research note: Needs fresh research at plan time — Ollama prompt-prefix KV-cache reuse magnitude is version-dependent (MEDIUM confidence). Measure the actual benefit empirically before counting on it for throughput.
 
@@ -140,7 +149,9 @@ Research note: Needs fresh research at plan time — Ollama prompt-prefix KV-cac
   3. Firms with missing or 404 websites get their URL resolved via SearXNG and re-enter the queue
   4. Newly discovered firms flow through the normal pipeline on the next heartbeat and appear in the export
 
-**Plans**: TBD
+**Plans**: 1/1 complete
+
+- [x] 07-01-PLAN.md — SearXNG discovery, dedupe, queueing, URL recovery
 
 Research note: Windows-native pivot (2026-07-19) — SearXNG discovery infra (DISC-01) relocated here from Phase 1. On Windows, stand it up via Docker Desktop (`searxng/searxng`, enable `search.formats: [html, json]`) or swap in a native free-metasearch path if avoiding Docker entirely; decided at plan time. All other Phase 7 work is native Windows Python.
 
@@ -152,12 +163,12 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Environment & Contract Foundation | 3/3 | Complete    | 2026-07-19 |
-| 2. Core Pipeline, Single Firm | 0/6 | Not started | - |
-| 3. Accuracy Benchmark | 0/TBD | Not started | - |
-| 4. Queue, Worker & Crash-Safe Batch | 0/TBD | Not started | - |
-| 5. nanoclaw Skills & Heartbeats | 0/TBD | Not started | - |
-| 6. Caching Layer | 0/TBD | Not started | - |
-| 7. Discovery & URL Recovery | 0/TBD | Not started | - |
+| 2. Core Pipeline, Single Firm | 6/6 | Complete   | 2026-07-19 |
+| 3. Accuracy Benchmark | 1/1 | Complete | 2026-07-19 |
+| 4. Queue, Worker & Crash-Safe Batch | 1/1 | Complete | 2026-07-19 |
+| 5. nanoclaw Skills & Heartbeats | 1/1 | Complete | 2026-07-19 |
+| 6. Caching Layer | 1/1 | Complete | 2026-07-19 |
+| 7. Discovery & URL Recovery | 1/1 | Complete | 2026-07-19 |
 
 ---
 *Roadmap created: 2026-07-19*

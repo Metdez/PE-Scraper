@@ -15,7 +15,7 @@ import asyncio
 import pytest
 from typer.testing import CliRunner
 
-from pescraper import cli, confidence, crawl, db, extract, provenance
+from pescraper import cache, cli, confidence, crawl, db, extract, provenance
 from pescraper.cli import app
 from pescraper.extract_schemas import CategoricalCriteria, FinancialCriteria
 from pescraper.models import FirmRecord, FirmStatus
@@ -137,6 +137,63 @@ def test_run_firm_async_populates_fields_and_provenance(monkeypatch, conn) -> No
         assert row["source_page_url"] == page_url
         assert row["content_hash"]
     assert set(found_quotes) == {"EBITDA of $5M", "to $25M", "We focus on Buyouts."}
+
+
+def test_run_firm_async_routes_extraction_through_cache(monkeypatch, conn) -> None:
+    url = "https://cached.example"
+    pages = {f"{url}/criteria": "Cached Capital targets buyouts."}
+    calls = 0
+
+    async def fake_select_pages(_url: str) -> dict[str, str]:
+        return pages
+
+    async def fake_extract_cached(cache_conn, cache_pages, **kwargs):
+        nonlocal calls
+        calls += 1
+        assert cache_conn is conn
+        assert cache_pages == pages
+        return (
+            FinancialCriteria(firm_name="Cached Capital", ebitda_min_musd=5),
+            CategoricalCriteria(firm_name="Cached Capital", deal_types="Buyout"),
+        )
+
+    monkeypatch.setattr(crawl, "select_pages", fake_select_pages)
+    monkeypatch.setattr(cache, "extract_cached", fake_extract_cached)
+
+    record, _ = asyncio.run(cli._run_firm_async(url, conn))
+
+    assert record.firm_name == "Cached Capital"
+    assert calls == 1
+
+
+def test_run_firm_async_records_quote_less_extracted_value(monkeypatch, conn) -> None:
+    url = "https://quote-less.example"
+    pages = {f"{url}/criteria": "Quote Less Capital investment criteria."}
+
+    async def fake_select_pages(_url: str) -> dict[str, str]:
+        return pages
+
+    async def fake_extract_cached(cache_conn, cache_pages, **kwargs):
+        return (
+            FinancialCriteria(firm_name="Quote Less Capital", ebitda_min_musd=7.5),
+            CategoricalCriteria(firm_name="Quote Less Capital"),
+        )
+
+    monkeypatch.setattr(crawl, "select_pages", fake_select_pages)
+    monkeypatch.setattr(cache, "extract_cached", fake_extract_cached)
+
+    _record, provenance_rows = asyncio.run(cli._run_firm_async(url, conn))
+
+    assert provenance_rows == [
+        {
+            "field": "ebitda_min_musd",
+            "value": "7.5",
+            "quote": None,
+            "source_page_url": None,
+            "content_hash": None,
+            "prompt_version": "financial_v1",
+        }
+    ]
 
 
 def test_run_firm_async_preserves_existing_confirmed_value_on_null_extraction(monkeypatch, conn) -> None:

@@ -13,49 +13,49 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Data Foundation
 
-- [ ] **DATA-01**: User can ingest the Capital IQ CSV; preprocessing seeds the firm store with regex first-pass values (ranges, deal types, activity tier) before any LLM call
+- [x] **DATA-01**: User can ingest the Capital IQ CSV; preprocessing seeds the firm store with regex first-pass values (ranges, deal types, activity tier) before any LLM call
 - [x] **DATA-02**: Firm store persists the 24-column schema with status lifecycle (pending → in_progress → complete/needs_review; stale after 90 days re-enters queue)
-- [ ] **DATA-03**: Every completed firm is persisted immediately (crash-safe) — a crash mid-run never loses finished work
-- [ ] **DATA-04**: Merge rules protect confirmed data — extracted non-null wins, null never overwrites a confirmed value, conflicts vs seed data are flagged Needs Review
-- [ ] **DATA-05**: User can export the dataset as color-coded Excel (with summary sheet) and CSV
+- [x] **DATA-03**: Every completed firm is persisted immediately (crash-safe) — a crash mid-run never loses finished work
+- [x] **DATA-04**: Merge rules protect confirmed data — extracted non-null wins, null never overwrites a confirmed value, conflicts vs seed data are flagged Needs Review
+- [x] **DATA-05**: User can export the dataset as color-coded Excel (with summary sheet) and CSV
 
 ### Pipeline
 
-- [ ] **PIPE-01**: Pipeline selects the ~5 most criteria-likely pages per firm site (adaptive crawl + priority-link fallback for 403s + skip-lists)
-- [ ] **PIPE-02**: HTML is decongested (nav/footer/image stripping, dedupe, mojibake fixes) and assembled into a page-priority prompt under an explicit token/char budget with `num_ctx` set
-- [ ] **PIPE-03**: qwen3:4b via Ollama extracts criteria fields using structured outputs with null-for-unknown discipline, controlled vocabularies, and deal-type disambiguation rules
-- [ ] **PIPE-04**: Confidence is computed objectively in code from field-population counts (never LLM self-report); weak rows get Needs Review
-- [ ] **PIPE-05**: Every extracted value carries per-field provenance (source page URL)
-- [ ] **PIPE-06**: A failing firm (404/timeout/JS-wall) is logged with a failure reason and the loop continues
-- [ ] **PIPE-07**: User can run the pipeline via CLI seams: single firm (`--slug`), limited batch (`--limit`), and status summary (`--summary`)
+- [x] **PIPE-01**: Pipeline selects the ~5 most criteria-likely pages per firm site (adaptive crawl + priority-link fallback for 403s + skip-lists)
+- [x] **PIPE-02**: HTML is decongested (nav/footer/image stripping, dedupe, mojibake fixes) and assembled into a page-priority prompt under an explicit token/char budget with `num_ctx` set
+- [x] **PIPE-03**: qwen3:4b via Ollama extracts criteria fields using structured outputs with null-for-unknown discipline, controlled vocabularies, and deal-type disambiguation rules
+- [x] **PIPE-04**: Confidence is computed objectively in code from field-population counts (never LLM self-report); weak rows get Needs Review
+- [x] **PIPE-05**: Every extracted value carries per-field provenance (source page URL)
+- [x] **PIPE-06**: A failing firm (404/timeout/JS-wall) is logged with a failure reason and the loop continues
+- [x] **PIPE-07**: User can run the pipeline via CLI seams: single firm (`--slug`), limited batch (`--limit`), and status summary (`--summary`)
 
 ### Quality
 
-- [ ] **QUAL-01**: User can run a benchmark harness that compares extractions against a hand-verified sample and reports a per-field match rate
-- [ ] **QUAL-02**: A short sample batch (~50 firms) runs unattended to completion and produces a populated, exported dataset
+- [x] **QUAL-01**: User can run a benchmark harness that compares extractions against a hand-verified sample and reports a per-field match rate
+- [x] **QUAL-02**: A short sample batch (~50 firms) runs unattended to completion and produces a populated, exported dataset
 
 ### nanoclaw Skills
 
-- [ ] **SKIL-01**: User can trigger a batch run from nanoclaw chat (point it at a CSV / firm count)
-- [ ] **SKIL-02**: User can send a firm URL or name in chat and receive its extracted criteria as a formatted reply
-- [ ] **SKIL-03**: User can ask freeform dataset questions from chat ("find firms that do $5-25M EBITDA buyouts in industrials") answered from the firm store
+- [x] **SKIL-01**: User can trigger a batch run from nanoclaw chat (point it at a CSV / firm count)
+- [x] **SKIL-02**: User can send a firm URL or name in chat and receive its extracted criteria as a formatted reply
+- [x] **SKIL-03**: User can ask freeform dataset questions from chat ("find firms that do $5-25M EBITDA buyouts in industrials") answered from the firm store
 
 ### Caching
 
-- [ ] **CACH-01**: Unchanged pages (content hash match) skip re-crawl and re-extraction on refresh runs
-- [ ] **CACH-02**: Extraction results are cached keyed on (model, prompt_version, content_hash) so identical inputs never re-spend tokens
-- [ ] **CACH-03**: Prompts are assembled prefix-stable (shared system/schema prefix, per-firm suffix) to exploit Ollama's KV cache reuse
+- [x] **CACH-01**: Unchanged pages (content hash match) skip re-crawl and re-extraction on refresh runs
+- [x] **CACH-02**: Extraction results are cached keyed on (model, prompt_version, content_hash) so identical inputs never re-spend tokens
+- [x] **CACH-03**: Prompts are assembled prefix-stable (shared system/schema prefix, per-firm suffix) to exploit Ollama's KV cache reuse
 
 ### Automation
 
-- [ ] **AUTO-01**: Scheduled heartbeats process queued + stale firms unattended, with a script gate that skips agent wake when the queue is empty
-- [ ] **AUTO-02**: Heartbeat errors are logged and surfaced in chat/status output — never crash the loop or silently corrupt the dataset
+- [x] **AUTO-01**: Scheduled heartbeats process queued + stale firms unattended, with a script gate that skips agent wake when the queue is empty
+- [x] **AUTO-02**: Heartbeat errors are logged and surfaced in chat/status output — never crash the loop or silently corrupt the dataset
 
 ### Discovery
 
-- [ ] **DISC-01**: Self-hosted SearXNG (via Docker Desktop) — or a native free-metasearch equivalent — runs with the JSON API enabled and reachable by the Windows pipeline
-- [ ] **DISC-02**: Discovery searches find candidate US PE firms not in the dataset, dedupe against existing firms (name/domain), and queue them as pending
-- [ ] **DISC-03**: Firms with missing or 404 websites get URL resolution/recovery via SearXNG
+- [x] **DISC-01**: Self-hosted SearXNG (via Docker Desktop) — or a native free-metasearch equivalent — runs with the JSON API enabled and reachable by the Windows pipeline
+- [x] **DISC-02**: Discovery searches find candidate US PE firms not in the dataset, dedupe against existing firms (name/domain), and queue them as pending
+- [x] **DISC-03**: Firms with missing or 404 websites get URL resolution/recovery via SearXNG
 
 ## v2 Requirements
 
@@ -99,30 +99,30 @@ Which phases cover which requirements. Updated during roadmap creation.
 |-------------|-------|--------|
 | ENVR-01 | Phase 1 | Complete |
 | DATA-02 | Phase 1 | Complete |
-| DATA-01 | Phase 2 | Pending |
-| DATA-04 | Phase 2 | Pending |
-| PIPE-01 | Phase 2 | Pending |
-| PIPE-02 | Phase 2 | Pending |
-| PIPE-03 | Phase 2 | Pending |
-| PIPE-04 | Phase 2 | Pending |
-| PIPE-05 | Phase 2 | Pending |
-| QUAL-01 | Phase 3 | Pending |
-| DATA-03 | Phase 4 | Pending |
-| DATA-05 | Phase 4 | Pending |
-| PIPE-06 | Phase 4 | Pending |
-| PIPE-07 | Phase 4 | Pending |
-| QUAL-02 | Phase 4 | Pending |
-| SKIL-01 | Phase 5 | Pending |
-| SKIL-02 | Phase 5 | Pending |
-| SKIL-03 | Phase 5 | Pending |
-| AUTO-01 | Phase 5 | Pending |
-| AUTO-02 | Phase 5 | Pending |
-| CACH-01 | Phase 6 | Pending |
-| CACH-02 | Phase 6 | Pending |
-| CACH-03 | Phase 6 | Pending |
-| DISC-01 | Phase 7 | Pending |
-| DISC-02 | Phase 7 | Pending |
-| DISC-03 | Phase 7 | Pending |
+| DATA-01 | Phase 2 | Complete |
+| DATA-04 | Phase 2 | Complete |
+| PIPE-01 | Phase 2 | Complete |
+| PIPE-02 | Phase 2 | Complete |
+| PIPE-03 | Phase 2 | Complete |
+| PIPE-04 | Phase 2 | Complete |
+| PIPE-05 | Phase 2 | Complete |
+| QUAL-01 | Phase 3 | Complete |
+| DATA-03 | Phase 4 | Complete |
+| DATA-05 | Phase 4 | Complete |
+| PIPE-06 | Phase 4 | Complete |
+| PIPE-07 | Phase 4 | Complete |
+| QUAL-02 | Phase 4 | Complete |
+| SKIL-01 | Phase 5 | Complete |
+| SKIL-02 | Phase 5 | Complete |
+| SKIL-03 | Phase 5 | Complete |
+| AUTO-01 | Phase 5 | Complete |
+| AUTO-02 | Phase 5 | Complete |
+| CACH-01 | Phase 6 | Complete |
+| CACH-02 | Phase 6 | Complete |
+| CACH-03 | Phase 6 | Complete |
+| DISC-01 | Phase 7 | Complete |
+| DISC-02 | Phase 7 | Complete |
+| DISC-03 | Phase 7 | Complete |
 
 **Coverage:**
 
