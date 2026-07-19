@@ -9,12 +9,12 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Environment
 
-- [ ] **ENVR-01**: Developer can run a documented environment smoke test that validates Windows Python 3.11 (asyncio Proactor + UTF-8 fixes), Ollama reachability on `localhost:11434` with a qwen3:4b structured-output round-trip, and Crawl4AI health (`crawl4ai-doctor` + Playwright launch) before any pipeline code runs
+- [x] **ENVR-01**: Developer can run a documented environment smoke test that validates Windows Python 3.11 (asyncio Proactor + UTF-8 fixes), Ollama reachability on `localhost:11434` with a qwen3:4b structured-output round-trip, and Crawl4AI health (`crawl4ai-doctor` + Playwright launch) before any pipeline code runs
 
 ### Data Foundation
 
 - [ ] **DATA-01**: User can ingest the Capital IQ CSV; preprocessing seeds the firm store with regex first-pass values (ranges, deal types, activity tier) before any LLM call
-- [ ] **DATA-02**: Firm store persists the 24-column schema with status lifecycle (pending → in_progress → complete/needs_review; stale after 90 days re-enters queue)
+- [x] **DATA-02**: Firm store persists the 24-column schema with status lifecycle (pending → in_progress → complete/needs_review; stale after 90 days re-enters queue)
 - [ ] **DATA-03**: Every completed firm is persisted immediately (crash-safe) — a crash mid-run never loses finished work
 - [ ] **DATA-04**: Merge rules protect confirmed data — extracted non-null wins, null never overwrites a confirmed value, conflicts vs seed data are flagged Needs Review
 - [ ] **DATA-05**: User can export the dataset as color-coded Excel (with summary sheet) and CSV
@@ -97,8 +97,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| ENVR-01 | Phase 1 | Pending |
-| DATA-02 | Phase 1 | Pending |
+| ENVR-01 | Phase 1 | Complete |
+| DATA-02 | Phase 1 | Complete |
 | DATA-01 | Phase 2 | Pending |
 | DATA-04 | Phase 2 | Pending |
 | PIPE-01 | Phase 2 | Pending |
@@ -125,6 +125,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | DISC-03 | Phase 7 | Pending |
 
 **Coverage:**
+
 - v1 requirements: 26 total
 - Mapped to phases: 26
 - Unmapped: 0 ✓
