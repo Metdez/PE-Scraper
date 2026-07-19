@@ -37,11 +37,6 @@ def test_run_stub_exits_zero() -> None:
     assert result.exit_code == 0
 
 
-def test_run_firm_stub_exits_zero() -> None:
-    result = runner.invoke(app, ["run-firm", "https://example.com"])
-    assert result.exit_code == 0
-
-
 def test_export_stub_exits_zero() -> None:
     result = runner.invoke(app, ["export"])
     assert result.exit_code == 0
@@ -247,3 +242,61 @@ def test_run_firm_async_range_conflict_forces_needs_review(monkeypatch, conn) ->
 
     assert record.needs_review is True
     assert record.status == FirmStatus.NEEDS_REVIEW
+
+
+# --- run-firm CLI command ------------------------------------------------
+
+
+class _FakeConn:
+    def __init__(self) -> None:
+        self.closed = False
+
+    def close(self) -> None:
+        self.closed = True
+
+
+def test_run_firm_wires_pipeline_and_prints_summary(monkeypatch) -> None:
+    url = "https://example.com"
+    record = FirmRecord(
+        firm_name="Acme Capital",
+        website=url,
+        confidence=0.75,
+        needs_review=False,
+        status=FirmStatus.COMPLETE,
+    )
+    provenance_rows = [
+        {
+            "field": "ebitda_min_musd",
+            "value": "5.0",
+            "quote": "EBITDA of $5M+",
+            "source_page_url": f"{url}/criteria",
+            "content_hash": "abc123",
+            "prompt_version": "financial_v1",
+        }
+    ]
+
+    async def fake_run_firm_async(_url: str, _conn) -> tuple[FirmRecord, list[dict]]:
+        return record, provenance_rows
+
+    fake_conn = _FakeConn()
+    upserted: list[tuple[object, FirmRecord]] = []
+    inserted: list[dict] = []
+
+    monkeypatch.setattr(cli, "_run_firm_async", fake_run_firm_async)
+    monkeypatch.setattr(db, "init_db", lambda: None)
+    monkeypatch.setattr(db, "connect", lambda: fake_conn)
+    monkeypatch.setattr(db, "upsert_firm", lambda c, r: upserted.append((c, r)))
+    monkeypatch.setattr(db, "insert_extraction", lambda c, **kwargs: inserted.append(kwargs))
+
+    result = runner.invoke(app, ["run-firm", url])
+
+    assert result.exit_code == 0
+    assert upserted == [(fake_conn, record)]
+    assert len(inserted) == 1
+    assert inserted[0]["field"] == "ebitda_min_musd"
+    assert fake_conn.closed is True
+    assert "Acme Capital" in result.output
+    assert "status=complete" in result.output
+    assert "confidence=0.75" in result.output
+    assert "needs_review=False" in result.output
+    assert "extractions_written=1" in result.output

@@ -1,18 +1,28 @@
 """pescraper command-line interface.
 
-Phase 1 skeleton: the command surface (run, run-firm, export, status, doctor,
-init-db) is the stable seam that later phases and the Windows Task Scheduler /
-nanoclaw orchestration invoke. The four data-pipeline commands are stubs here;
-real behavior arrives in later phases.
+The command surface (run, run-firm, export, status, doctor, init-db) is the
+stable seam that later phases and the Windows Task Scheduler / nanoclaw
+orchestration invoke.
+
+Phase 2 replaces ``run-firm``'s Phase 1 stub with the real single-firm
+pipeline: page selection -> decongestion -> qwen3:4b structured extraction ->
+code-computed confidence -> null-safe merge -> persistence. ``run``, ``export``,
+and ``status`` remain Phase 1 stubs; the batch/queue worker and export/report
+paths land in later phases.
 
 Importing this module imports ``pescraper``, which activates the Windows runtime
 hardening (Proactor policy + UTF-8) as a side effect, so the console entry point
 runs under the hardened runtime.
 
-``doctor`` and ``init-db`` deliberately import their implementation modules
-(``pescraper.doctor`` / ``pescraper.db``) *lazily inside the function body*. Those
-modules land in wave 2; keeping the imports lazy means ``pescraper --help`` and
-every stub work now, before those modules exist.
+Heavier implementation modules (``pescraper.doctor``, ``pescraper.db``,
+``pescraper.crawl``, ``pescraper.extract``, ``pescraper.confidence``,
+``pescraper.merge``, ``pescraper.provenance``, ``pescraper.decongest``,
+``pescraper.models``) are deliberately imported *lazily inside function bodies*
+so ``pescraper --help`` and every not-yet-exercised command stay fast, and so
+tests can monkeypatch each target module's attributes directly (the lazy
+``from pescraper import X`` picks up the same module object a test's
+``monkeypatch.setattr(X, "name", fake)`` mutates — the same pattern
+``test_doctor.py`` already uses for ``ollama.chat``).
 """
 
 from __future__ import annotations
@@ -186,8 +196,37 @@ def run() -> None:
 
 @app.command("run-firm")
 def run_firm(url: str = typer.Argument(..., help="Firm website URL to research.")) -> None:
-    """Research a single firm by URL (Phase 1 skeleton)."""
-    typer.echo(f"pescraper run-firm {url}: Phase 1 skeleton — single-firm research lands in a later phase.")
+    """Research a single firm by URL: crawl, extract, score, and persist."""
+    import asyncio
+
+    from pescraper import db
+
+    db.init_db()
+    conn = db.connect()
+    try:
+        record, provenance_rows = asyncio.run(_run_firm_async(url, conn))
+        db.upsert_firm(conn, record)
+        for row in provenance_rows:
+            db.insert_extraction(
+                conn,
+                firm_website=url,
+                field=row["field"],
+                value=row["value"],
+                quote=row["quote"],
+                source_page_url=row["source_page_url"],
+                model="qwen3:4b",
+                prompt_version=row["prompt_version"],
+                content_hash=row["content_hash"],
+            )
+    finally:
+        conn.close()
+
+    typer.echo(
+        f"{record.firm_name}: status={record.status.value} "
+        f"confidence={(record.confidence or 0.0):.2f} "
+        f"needs_review={record.needs_review} "
+        f"extractions_written={len(provenance_rows)}"
+    )
 
 
 @app.command()
