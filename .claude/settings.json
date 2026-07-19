@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__firecrawl__firecrawl_research_search_github",
+      "mcp__firecrawl__firecrawl_search_feedback",
+      "Skill(gsd-autonomous)",
+      "Skill(gsd-autonomous:*)"
+    ]
+  }
+}

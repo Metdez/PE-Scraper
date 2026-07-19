@@ -1,0 +1,29 @@
+# Dependencies
+node_modules/
+.venv/
+__pycache__/
+*.pyc
+
+# Secrets — never commit
+.env
+.env.*
+credentials.json
+token.json
+
+# Intermediates (always regenerated)
+.tmp/
+
+# Local data artifacts (large / regenerated)
+*.xlsx
+data/raw/
+data/cache/
+
+# Pipeline store — Capital IQ-derived data, never commit (threat T-01-03)
+*.db
+*.db-wal
+*.db-shm
+data/exports/
+
+# OS noise
+Thumbs.db
+.DS_Store
