@@ -2,7 +2,7 @@
 
 ## Overview
 
-Seven phases take a raw Capital IQ CSV of ~5,000 PE firm URLs to a self-updating, benchmarked investment-criteria dataset at zero marginal API cost. The order is risk-first: Phase 1 clears the Windows/WSL2/Docker landmines and establishes the SQLite contract both halves build against; Phase 2 proves the highest-variance unknown — qwen3:4b extraction quality — on single firms; Phase 3 makes that quality measurable (the v1 acceptance gate); Phase 4 makes batches crash-safe and exportable; Phase 5 layers thin nanoclaw skills and heartbeats over the proven CLI; Phase 6 adds the three-tier cache (deliberately after the benchmark exists, so cache-staleness bugs are detectable); Phase 7 turns on SearXNG discovery and URL recovery so the dataset grows itself.
+Seven phases take a raw Capital IQ CSV of ~5,000 PE firm URLs to a self-updating, benchmarked investment-criteria dataset at zero marginal API cost. The order is risk-first: Phase 1 clears the Windows-native runtime landmines (Ollama on localhost, Playwright, asyncio/UTF-8) and establishes the SQLite contract the pipeline builds against; Phase 2 proves the highest-variance unknown — qwen3:4b extraction quality — on single firms; Phase 3 makes that quality measurable (the v1 acceptance gate); Phase 4 makes batches crash-safe and exportable; Phase 5 layers thin nanoclaw skills and heartbeats over the proven CLI; Phase 6 adds the three-tier cache (deliberately after the benchmark exists, so cache-staleness bugs are detectable); Phase 7 turns on SearXNG discovery and URL recovery so the dataset grows itself.
 
 ## Phases
 
@@ -12,7 +12,7 @@ Seven phases take a raw Capital IQ CSV of ~5,000 PE firm URLs to a self-updating
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [ ] **Phase 1: Environment & Contract Foundation** - Verified runtime (WSL2/Docker/Ollama/Crawl4AI/SearXNG) plus the pipeline.db SQLite contract and CLI skeleton
+- [ ] **Phase 1: Environment & Contract Foundation** - Verified Windows-native runtime (Windows Python 3.11 + Ollama/qwen3:4b + Crawl4AI/Playwright) plus the pipeline.db SQLite contract and CLI skeleton
 - [ ] **Phase 2: Core Pipeline, Single Firm** - One firm URL runs end-to-end: page selection → decongestion → qwen3:4b extraction → merged 24-column row with provenance and confidence
 - [ ] **Phase 3: Accuracy Benchmark** - Hand-verified sample harness reporting per-field match rate; the v1 acceptance gate and permanent regression suite
 - [ ] **Phase 4: Queue, Worker & Crash-Safe Batch** - Detached worker with atomic claims, per-firm commits, resume-on-rerun, failure logging, and Excel/CSV export
@@ -23,17 +23,16 @@ Decimal phases appear between their surrounding integers in numeric order.
 ## Phase Details
 
 ### Phase 1: Environment & Contract Foundation
-**Goal**: Every runtime seam is empirically verified working and the SQLite contract both halves build against exists, before any pipeline code is written
+**Goal**: Every Windows-native runtime seam is empirically verified working and the SQLite contract the pipeline builds against exists, before any pipeline code is written
 **Depends on**: Nothing (first phase)
-**Requirements**: ENVR-01, DATA-02, DISC-01
+**Requirements**: ENVR-01, DATA-02
 **Success Criteria** (what must be TRUE):
-  1. Developer can run one documented smoke-test command that validates WSL2 + Docker, container→host Ollama reachability with a qwen3:4b structured-output round-trip, Crawl4AI health (`crawl4ai-doctor` + Playwright launch), and Windows asyncio/UTF-8 fixes — and it passes green
+  1. Developer can run one documented smoke-test command that validates Windows Python 3.11 (asyncio Proactor policy + UTF-8 I/O), Ollama reachable on `localhost:11434` with a qwen3:4b structured-output round-trip, and Crawl4AI health (`crawl4ai-doctor` + a Playwright Chromium launch) — and it passes green
   2. `pipeline.db` (WAL) exists with jobs/firms/pages/extractions/cache tables; a firm row moves through pending → in_progress → complete/needs_review, and rows older than 90 days are surfaced as stale for re-queue
-  3. A nanoclaw agent container can read and write the volume-mounted `pipeline.db` (the cross-runtime seam proven, not assumed)
-  4. SearXNG runs in Docker with JSON API enabled; a JSON search query from the pipeline environment returns results (not 403)
+  3. The `pescraper` CLI skeleton installs into the uv-managed Windows venv and runs (`pescraper --help` plus stub `run`/`run-firm`/`export`/`status` subcommands), confirming the Windows Python entry point works
 **Plans**: TBD
 
-Research note: Verify the nanoclaw container ↔ volume-mounted SQLite seam (Bun-side SQLite access) and container→host Ollama reachability empirically — nanoclaw's egress lockdown can hijack `host.docker.internal` (issue #2731). FastAPI stays documented as the fallback seam if the mount fails. Confirm current SearXNG settings key names during setup.
+Research note: Windows-native pivot (2026-07-19) — pipeline, Ollama, Crawl4AI/Playwright, and SQLite all run natively on Windows; no WSL2 distro and no container mount in the pipeline data path. Set the asyncio `WindowsProactorEventLoopPolicy` (Playwright needs subprocess support) and force UTF-8 (`PYTHONUTF8=1`, mojibake guards) — the top Windows failure modes. The nanoclaw↔store integration seam moves to Phase 5 and SearXNG/Docker discovery infra (DISC-01) to Phase 7, each verified when that phase is built rather than assumed up front.
 
 ### Phase 2: Core Pipeline, Single Firm
 **Goal**: A single firm URL produces an accurate, trustworthy 24-column row — the project's go/no-go on qwen3:4b extraction quality
@@ -83,6 +82,8 @@ Research note: Verify the nanoclaw container ↔ volume-mounted SQLite seam (Bun
 
 Research note: Needs fresh research at plan time — nanoclaw is young and fast-moving. Re-verify skill authoring, scheduled-task and script-gate specifics, and egress-lockdown/Ollama connectivity against the then-current pinned version. Keep skills thin: the pipeline must remain fully operable via CLI with nanoclaw stopped.
 
+Windows-native pivot (2026-07-19): nanoclaw's WSL2 requirement makes it the least Windows-native piece. At plan time decide between (a) **Windows Task Scheduler** heartbeats + the CLI (and optionally a lightweight local chat/TUI) as the interface, dropping nanoclaw as a hard dependency, or (b) nanoclaw running in WSL2 purely as a thin chat front-end talking to the Windows pipeline over `localhost`. Default leans (a) — the "skills stay thin, CLI runs standalone" principle already de-risks dropping nanoclaw, and Task Scheduler is the native equivalent of nanoclaw's cron heartbeats + token-free script gate.
+
 ### Phase 6: Caching Layer
 **Goal**: Refresh runs cost near-zero — unchanged content never re-crawls or re-spends tokens — without ever serving stale or poisoned data
 **Depends on**: Phase 5 (and Phase 3 — the benchmark is what catches cache-staleness bugs)
@@ -99,12 +100,15 @@ Research note: Needs fresh research at plan time — Ollama prompt-prefix KV-cac
 ### Phase 7: Discovery & URL Recovery
 **Goal**: The dataset grows and heals itself — SearXNG finds firms the seed CSV missed and recovers dead firm URLs
 **Depends on**: Phase 6
-**Requirements**: DISC-02, DISC-03
+**Requirements**: DISC-01, DISC-02, DISC-03
 **Success Criteria** (what must be TRUE):
-  1. A discovery run finds candidate US PE firms not in the dataset, classifies PE-vs-not, dedupes against existing firms by name/domain, and queues genuine new firms as pending
-  2. Firms with missing or 404 websites get their URL resolved via SearXNG and re-enter the queue
-  3. Newly discovered firms flow through the normal pipeline on the next heartbeat and appear in the export
+  1. Self-hosted SearXNG is reachable with the JSON API enabled (returns results, not 403) from the Windows pipeline — via Docker Desktop or a native free-metasearch fallback (DISC-01, relocated from Phase 1)
+  2. A discovery run finds candidate US PE firms not in the dataset, classifies PE-vs-not, dedupes against existing firms by name/domain, and queues genuine new firms as pending
+  3. Firms with missing or 404 websites get their URL resolved via SearXNG and re-enter the queue
+  4. Newly discovered firms flow through the normal pipeline on the next heartbeat and appear in the export
 **Plans**: TBD
+
+Research note: Windows-native pivot (2026-07-19) — SearXNG discovery infra (DISC-01) relocated here from Phase 1. On Windows, stand it up via Docker Desktop (`searxng/searxng`, enable `search.formats: [html, json]`) or swap in a native free-metasearch path if avoiding Docker entirely; decided at plan time. All other Phase 7 work is native Windows Python.
 
 ## Progress
 

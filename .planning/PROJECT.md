@@ -42,13 +42,13 @@ Turn a raw list of PE firm URLs into an accurate, continuously self-updating, ex
 - **24-column schema** (from Requirements.md sample rows): Firm Name, Type, State, City, Website, US Investments, Rev Min ($M), Rev Max ($M), EBITDA Min ($M), EBITDA Max ($M), EV Min ($M), EV Max ($M), Check Min ($M), Check Max ($M), Deal Types, Sector Tier 1, AUM ($M), Activity, Last Deal, Fund Name, Confidence, Needs Review, Last Checked, Status
 - **Deal types vocabulary:** Buyout, Recap, Minority, Growth Equity, Venture, Mezzanine Debt, Other
 - **Known accuracy reality:** the crawl misses pages when link structures differ; extraction is imperfect — hence Confidence/Needs Review columns and the benchmark requirement
-- **Prerequisites** (install via safest standard package manager): Git, Docker, Node.js 20+, pnpm 10+, Ollama, qwen3:4b
+- **Prerequisites** (Windows-native): Git, Python 3.11 + uv, Ollama + qwen3:4b, Crawl4AI/Playwright (Chromium). Node.js 20+ already present. Docker Desktop only if SearXNG-in-Docker is chosen at Phase 7.
 
 ## Constraints
 
 - **Cost**: Zero marginal API spend — local model only, self-hosted search only. This is the founding motivation.
-- **Tech stack**: nanoclaw is the agent framework; everything ships as nanoclaw skills/hooks. Crawl4AI for crawling. Ollama serving qwen3:4b for extraction. SearXNG for search.
-- **Platform**: Windows 11 host; Docker available for containerized pieces (SearXNG, nanoclaw containers)
+- **Tech stack**: Windows-native Python pipeline — Crawl4AI for crawling, Ollama serving qwen3:4b for extraction, SQLite (`pipeline.db`) as source of truth. Orchestration + heartbeats via Windows Task Scheduler + CLI by default (nanoclaw-in-WSL2 reconsidered at Phase 5). SearXNG (or a native metasearch) for discovery.
+- **Platform**: Windows 11 host, native. Pipeline runs on Windows Python 3.11 via uv — no WSL2 distro, no container in the data path. Docker Desktop optional, only if SearXNG-in-Docker is chosen at Phase 7.
 - **Data**: Deliverable is local Excel/CSV; a local store (e.g. SQLite) may be source of truth, but no cloud services in the data path
 - **Unattended operation**: heartbeat runs must work without a human watching — errors get logged and flagged, not crash the loop
 
@@ -63,6 +63,8 @@ Turn a raw list of PE firm URLs into an accurate, continuously self-updating, ex
 | Local Excel/CSV as deliverable | Local-first ethos; shareable exports without cloud dependency | — Pending |
 | Phone + trend reports deferred to v2 | Core loop must be trustworthy before presentation layers | — Pending |
 | v1 proven on short sample batch, not full 5k | Fast validation loop; scale is an ops exercise once accuracy is proven | — Pending |
+| Windows-native runtime (no WSL2 distro, no container in data path) | User directive 2026-07-19 "make it good for Windows"; Windows Python/uv + Ollama + Playwright + SQLite all run natively, removing path-hell and the container↔host Ollama landmine | — Adopted |
+| nanoclaw reconsidered → Windows Task Scheduler + CLI (default) | nanoclaw's WSL2 requirement is the least-Windows-native piece; the skills-stay-thin principle already lets the CLI run standalone. Finalize at Phase 5 | — Pending |
 
 ## Evolution
 

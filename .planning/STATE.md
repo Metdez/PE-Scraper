@@ -23,7 +23,7 @@ See: .planning/PROJECT.md (updated 2026-07-19)
 Phase: 1 of 7 (Environment & Contract Foundation)
 Plan: 0 of TBD in current phase
 Status: Ready to plan
-Last activity: 2026-07-19 — Roadmap created (7 phases, 26/26 requirements mapped)
+Last activity: 2026-07-19 — Windows-native pivot applied to ROADMAP/REQUIREMENTS; provisioning Ollama + qwen3:4b; ready to plan Phase 1
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -53,7 +53,8 @@ Progress: [░░░░░░░░░░] 0%
 Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting current work:
 
-- [Roadmap]: SQLite queue-as-contract is the primary nanoclaw↔pipeline seam (volume-mounted pipeline.db); no HTTP service in v1, FastAPI documented as fallback
+- [2026-07-19] **Windows-native pivot** (user directive "make it good for Windows"): pipeline, Ollama, Crawl4AI/Playwright, and SQLite all run natively on Windows — no WSL2 distro, no container in the data path. Phase 1 now verifies Windows seams (Ollama `localhost:11434` qwen3:4b round-trip, Playwright, asyncio Proactor + UTF-8). nanoclaw↔store seam → Phase 5; SearXNG/Docker discovery infra (DISC-01) → Phase 7.
+- [Roadmap]: SQLite is the source-of-truth contract (native `pipeline.db`, WAL, per-firm transactions); Phase 5 decides how the orchestration layer (nanoclaw-in-WSL2 vs Windows Task Scheduler + CLI) reaches it
 - [Roadmap]: Benchmark (Phase 3) deliberately precedes caching (Phase 6) — it is the detector for cache-staleness and prompt regressions
 - [Roadmap]: Skills stay thin — pipeline must run fully from CLI with nanoclaw stopped (insurance against framework immaturity)
 
@@ -63,9 +64,10 @@ None yet.
 
 ### Blockers/Concerns
 
-- [Phase 1]: nanoclaw container ↔ volume-mounted SQLite seam and container→host Ollama reachability are asserted, not verified — must smoke-test first (nanoclaw #2731 egress lockdown risk)
-- [Phase 5]: nanoclaw moves fast — re-research skill/script-gate authoring against then-current version at plan time
+- [Phase 1]: Windows-native runtime seams (Ollama `localhost:11434` qwen3:4b round-trip, Playwright Chromium launch, asyncio Proactor + UTF-8) must smoke-test green before pipeline code — Ollama install + qwen3:4b pull in progress this session
+- [Phase 5]: nanoclaw needs WSL2 and moves fast — decide nanoclaw-in-WSL2 vs Windows Task Scheduler + CLI (default: Task Scheduler + CLI) and re-research authoring against then-current version at plan time
 - [Phase 6]: Ollama prefix KV-cache reuse benefit is version-dependent — measure empirically at plan time
+- [Phase 7]: SearXNG (DISC-01, relocated from Phase 1) — run via Docker Desktop or a native metasearch fallback; decide at plan time
 - [Phase 3+]: qwen3:4b accuracy ceiling unknown until benchmark exists; qwen3:8b is the pre-agreed first escalation knob
 
 ## Deferred Items

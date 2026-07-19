@@ -9,7 +9,7 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Environment
 
-- [ ] **ENVR-01**: Developer can run a documented environment smoke test that validates WSL2 + Docker, container→host Ollama reachability, Crawl4AI health (`crawl4ai-doctor`), and Windows asyncio/UTF-8 fixes before any pipeline code runs
+- [ ] **ENVR-01**: Developer can run a documented environment smoke test that validates Windows Python 3.11 (asyncio Proactor + UTF-8 fixes), Ollama reachability on `localhost:11434` with a qwen3:4b structured-output round-trip, and Crawl4AI health (`crawl4ai-doctor` + Playwright launch) before any pipeline code runs
 
 ### Data Foundation
 
@@ -53,7 +53,7 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Discovery
 
-- [ ] **DISC-01**: Self-hosted SearXNG runs in Docker with JSON API enabled and reachable by the pipeline
+- [ ] **DISC-01**: Self-hosted SearXNG (via Docker Desktop) — or a native free-metasearch equivalent — runs with the JSON API enabled and reachable by the Windows pipeline
 - [ ] **DISC-02**: Discovery searches find candidate US PE firms not in the dataset, dedupe against existing firms (name/domain), and queue them as pending
 - [ ] **DISC-03**: Firms with missing or 404 websites get URL resolution/recovery via SearXNG
 
@@ -99,7 +99,6 @@ Which phases cover which requirements. Updated during roadmap creation.
 |-------------|-------|--------|
 | ENVR-01 | Phase 1 | Pending |
 | DATA-02 | Phase 1 | Pending |
-| DISC-01 | Phase 1 | Pending |
 | DATA-01 | Phase 2 | Pending |
 | DATA-04 | Phase 2 | Pending |
 | PIPE-01 | Phase 2 | Pending |
@@ -121,6 +120,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | CACH-01 | Phase 6 | Pending |
 | CACH-02 | Phase 6 | Pending |
 | CACH-03 | Phase 6 | Pending |
+| DISC-01 | Phase 7 | Pending |
 | DISC-02 | Phase 7 | Pending |
 | DISC-03 | Phase 7 | Pending |
 
