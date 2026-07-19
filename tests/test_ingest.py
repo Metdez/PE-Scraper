@@ -429,6 +429,37 @@ def test_ingest_csv_treats_na_as_missing_for_direct_numeric_field(tmp_path) -> N
     assert acme.us_investments is None
 
 
+def test_ingest_csv_strips_thousands_separator_commas_from_numeric_direct_field(
+    tmp_path,
+) -> None:
+    """Capital IQ emits thousands-separator commas in some integer columns
+    (e.g. "1,238"), which Pydantic's int coercion cannot parse directly --
+    ingest_csv must strip them before constructing FirmRecord."""
+    from pescraper import db
+    from pescraper.ingest import ingest_csv
+
+    csv_path = tmp_path / "capiq.csv"
+    _write_csv(
+        csv_path,
+        [
+            {
+                "Entity Name": "Acme Capital",
+                "Web Address": "www.acme.example",
+                "Total Investments\n(actual)": "1,238",
+            }
+        ],
+        fieldnames=["Entity Name", "Web Address", "Total Investments\n(actual)"],
+    )
+
+    conn = _connect(tmp_path)
+    summary = ingest_csv(csv_path, conn)
+
+    assert summary.rows_skipped == 0
+    acme = db.get_firm(conn, "https://www.acme.example")
+    assert acme is not None
+    assert acme.us_investments == 1238
+
+
 def test_ingest_csv_maps_total_investments_actual_to_us_investments(tmp_path) -> None:
     """A populated "Total Investments\n(actual)" cell maps to us_investments."""
     from pescraper import db

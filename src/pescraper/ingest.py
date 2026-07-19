@@ -28,6 +28,7 @@ import dataclasses
 import logging
 import re
 import sqlite3
+import typing
 from pathlib import Path
 from typing import Any
 
@@ -35,6 +36,28 @@ from pescraper import db, merge
 from pescraper.models import FirmRecord
 
 logger = logging.getLogger(__name__)
+
+
+def _unwrap_optional(annotation: Any) -> Any:
+    """Unwrap ``Optional[X]`` (``Union[X, None]``) down to ``X``; pass through otherwise."""
+    args = typing.get_args(annotation)
+    non_none = [a for a in args if a is not type(None)]
+    if len(non_none) == 1:
+        return non_none[0]
+    return annotation
+
+
+# Field names whose FirmRecord annotation is int or float (Optional-unwrapped).
+# Capital IQ emits thousands-separator commas in some integer columns (e.g.
+# "Total Investments (actual)" -> "1,238"), which Pydantic's int/float coercion
+# cannot parse directly. Stripping commas generically for these fields (rather
+# than special-casing us_investments alone) keeps the fix applicable to any
+# numeric direct-field column a future CSV might introduce.
+_NUMERIC_FIELD_NAMES: frozenset[str] = frozenset(
+    name
+    for name, field in FirmRecord.model_fields.items()
+    if _unwrap_optional(field.annotation) in (int, float)
+)
 
 
 # --------------------------------------------------------------------------- #
@@ -279,6 +302,10 @@ def ingest_csv(csv_path: str | Path, conn: sqlite3.Connection) -> IngestSummary:
                 value = raw_value.strip() if isinstance(raw_value, str) else raw_value
                 if isinstance(value, str) and value.casefold() in _MISSING_SENTINELS:
                     value = None
+                elif isinstance(value, str) and key in _NUMERIC_FIELD_NAMES:
+                    # Strip thousands-separator commas (e.g. "1,238" -> "1238")
+                    # so Pydantic's int/float coercion doesn't reject the cell.
+                    value = value.replace(",", "")
                 field_values[key] = value
 
             # Second pass: free-text range pseudo-keys -- only fill a
