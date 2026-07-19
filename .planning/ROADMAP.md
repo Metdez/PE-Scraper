@@ -55,7 +55,15 @@ Research note: Windows-native pivot (2026-07-19) — pipeline, Ollama, Crawl4AI/
   4. Confidence is computed in code from field-population counts (never LLM self-report), and sparse rows are flagged Needs Review
   5. Capital IQ CSV ingest seeds the store with regex first-pass values before any LLM call, and merge rules hold: extracted non-null wins, null never overwrites a confirmed value, seed conflicts are flagged Needs Review
 
-**Plans**: TBD
+**Plans**: 6 plans
+
+Plans:
+- [ ] 02-01-PLAN.md — Business rules: merge.py, confidence.py, provenance.py (DATA-04, PIPE-04, PIPE-05)
+- [ ] 02-02-PLAN.md — db.py extensions: get_firm(), insert_extraction() (PIPE-05)
+- [ ] 02-03-PLAN.md — Adaptive crawl, skip-list/403 fallback & manual decongestion (PIPE-01, PIPE-02)
+- [ ] 02-04-PLAN.md — Field-group extraction schemas, prompts & Ollama calls (PIPE-03)
+- [ ] 02-05-PLAN.md — Capital IQ CSV ingest & seed merge (DATA-01)
+- [ ] 02-06-PLAN.md — Integration: wire run-firm end-to-end + live smoke-test checkpoint (DATA-04, PIPE-01..05)
 
 ### Phase 3: Accuracy Benchmark
 
@@ -144,7 +152,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Environment & Contract Foundation | 3/3 | Complete    | 2026-07-19 |
-| 2. Core Pipeline, Single Firm | 0/TBD | Not started | - |
+| 2. Core Pipeline, Single Firm | 0/6 | Not started | - |
 | 3. Accuracy Benchmark | 0/TBD | Not started | - |
 | 4. Queue, Worker & Crash-Safe Batch | 0/TBD | Not started | - |
 | 5. nanoclaw Skills & Heartbeats | 0/TBD | Not started | - |
