@@ -20,7 +20,7 @@ The system preserves `null` when a criterion cannot be found. It does not invent
 ## How it works
 
 ```text
-Capital IQ CSV or URL
+A CSV of URL's or URL
         |
         v
 SQLite queue --> Crawl4AI page selection --> cleaned page text
