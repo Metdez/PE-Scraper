@@ -80,3 +80,82 @@ def test_minimal_firm_record_model_validates_with_null_criteria() -> None:
     # model_json_schema() round-trips: a JSON dump re-validates to an equal record.
     dumped = record.model_dump_json()
     assert FirmRecord.model_validate_json(dumped) == record
+
+
+# --------------------------------------------------------------------------- #
+# Task 2 — init_db idempotency, WAL, the five tables, firms columns
+# --------------------------------------------------------------------------- #
+
+FIVE_TABLES = {"jobs", "firms", "pages", "extractions", "cache"}
+
+
+def test_init_db_creates_file_and_is_idempotent(tmp_path) -> None:
+    from pescraper.db import init_db
+
+    db_path = tmp_path / "pipeline.db"
+    first = init_db(db_path)
+    assert first.exists()
+    # Second call is a no-op (CREATE TABLE IF NOT EXISTS) and returns the same path.
+    second = init_db(db_path)
+    assert second == first
+    assert second.exists()
+
+
+def test_init_db_enables_wal_journal_mode(tmp_path) -> None:
+    from pescraper.db import connect, init_db
+
+    db_path = tmp_path / "pipeline.db"
+    init_db(db_path)
+    conn = connect(db_path)
+    try:
+        mode = conn.execute("PRAGMA journal_mode").fetchone()[0]
+    finally:
+        conn.close()
+    assert str(mode).lower() == "wal"
+
+
+def test_init_db_creates_all_five_tables(tmp_path) -> None:
+    from pescraper.db import connect, init_db
+
+    db_path = tmp_path / "pipeline.db"
+    init_db(db_path)
+    conn = connect(db_path)
+    try:
+        rows = conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table'"
+        ).fetchall()
+    finally:
+        conn.close()
+    names = {r[0] for r in rows}
+    assert FIVE_TABLES.issubset(names)
+
+
+def test_firms_table_has_all_24_columns(tmp_path) -> None:
+    from pescraper.db import connect, init_db
+    from pescraper.models import FIRM_COLUMNS
+
+    db_path = tmp_path / "pipeline.db"
+    init_db(db_path)
+    conn = connect(db_path)
+    try:
+        info = conn.execute("PRAGMA table_info(firms)").fetchall()
+    finally:
+        conn.close()
+    col_names = {row[1] for row in info}
+    for name in FIRM_COLUMNS:
+        assert name in col_names, f"firms table missing column {name!r}"
+
+
+def test_connect_applies_busy_timeout_and_foreign_keys(tmp_path) -> None:
+    from pescraper.db import connect, init_db
+
+    db_path = tmp_path / "pipeline.db"
+    init_db(db_path)
+    conn = connect(db_path)
+    try:
+        busy = conn.execute("PRAGMA busy_timeout").fetchone()[0]
+        fks = conn.execute("PRAGMA foreign_keys").fetchone()[0]
+    finally:
+        conn.close()
+    assert int(busy) == 5000
+    assert int(fks) == 1
