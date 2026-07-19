@@ -30,7 +30,10 @@ Decimal phases appear between their surrounding integers in numeric order.
   1. Developer can run one documented smoke-test command that validates Windows Python 3.11 (asyncio Proactor policy + UTF-8 I/O), Ollama reachable on `localhost:11434` with a qwen3:4b structured-output round-trip, and Crawl4AI health (`crawl4ai-doctor` + a Playwright Chromium launch) — and it passes green
   2. `pipeline.db` (WAL) exists with jobs/firms/pages/extractions/cache tables; a firm row moves through pending → in_progress → complete/needs_review, and rows older than 90 days are surfaced as stale for re-queue
   3. The `pescraper` CLI skeleton installs into the uv-managed Windows venv and runs (`pescraper --help` plus stub `run`/`run-firm`/`export`/`status` subcommands), confirming the Windows Python entry point works
-**Plans**: TBD
+**Plans**: 3 plans
+- [ ] 01-01-PLAN.md — Package scaffold, Windows runtime (Proactor + UTF-8), and typer CLI skeleton [ENVR-01]
+- [ ] 01-02-PLAN.md — SQLite contract pipeline.db (5 tables, 24-column firms, status lifecycle, 90-day staleness) [DATA-02]
+- [ ] 01-03-PLAN.md — One-command Windows smoke test (Python 3.11 + Ollama qwen3:4b structured round-trip + Crawl4AI/Chromium) [ENVR-01]
 
 Research note: Windows-native pivot (2026-07-19) — pipeline, Ollama, Crawl4AI/Playwright, and SQLite all run natively on Windows; no WSL2 distro and no container mount in the pipeline data path. Set the asyncio `WindowsProactorEventLoopPolicy` (Playwright needs subprocess support) and force UTF-8 (`PYTHONUTF8=1`, mojibake guards) — the top Windows failure modes. The nanoclaw↔store integration seam moves to Phase 5 and SearXNG/Docker discovery infra (DISC-01) to Phase 7, each verified when that phase is built rather than assumed up front.
 
@@ -117,7 +120,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Environment & Contract Foundation | 0/TBD | Not started | - |
+| 1. Environment & Contract Foundation | 0/3 | Not started | - |
 | 2. Core Pipeline, Single Firm | 0/TBD | Not started | - |
 | 3. Accuracy Benchmark | 0/TBD | Not started | - |
 | 4. Queue, Worker & Crash-Safe Batch | 0/TBD | Not started | - |
