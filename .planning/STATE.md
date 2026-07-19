@@ -4,8 +4,8 @@ milestone: v1.0
 milestone_name: milestone
 current_phase: 2
 current_phase_name: Core Pipeline, Single Firm
-status: executing
-stopped_at: Roadmap and state initialized; ready for `/gsd-plan-phase 1`
+status: planning
+stopped_at: Phase 1 complete; ready for `/gsd-plan-phase 2`
 last_updated: "2026-07-19T18:30:32.799Z"
 last_activity: 2026-07-19
 last_activity_desc: Phase 1 complete, transitioned to Phase 2
@@ -24,16 +24,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-19)
 
 **Core value:** Turn a raw list of PE firm URLs into an accurate, continuously self-updating, exportable investment-criteria dataset at zero marginal API cost.
-**Current focus:** Phase 1 — Environment & Contract Foundation
+**Current focus:** Phase 2 — Core Pipeline, Single Firm
 
 ## Current Position
 
-Phase: 2 — Core Pipeline, Single Firm
-Plan: Not started
-Status: Executing Phase 1
-Last activity: 2026-07-19 — Phase 1 complete, transitioned to Phase 2
+Phase: 2 of 7 (Core Pipeline, Single Firm)
+Plan: 0 of TBD in current phase
+Status: Ready to plan
+Last activity: 2026-07-19 — Phase 1 complete (3/3 plans, verification passed 8/8), transitioned to Phase 2
 
-Progress: [░░░░░░░░░░] 0%
+Progress: [██░░░░░░░░] 14%
 
 ## Performance Metrics
 
@@ -74,11 +74,12 @@ None yet.
 
 ### Blockers/Concerns
 
-- [Phase 1]: Windows-native runtime seams (Ollama `localhost:11434` qwen3:4b round-trip, Playwright Chromium launch, asyncio Proactor + UTF-8) must smoke-test green before pipeline code — Ollama install + qwen3:4b pull in progress this session
+- [Phase 2]: qwen3:4b structured-output probe (this session, ad hoc, outside the pipeline) returned dollar amounts as absolute values (`5000000`) rather than the `$M`-scaled units the 24-column schema expects, and mis-transcribed one figure (`$40M` → `40001000`) — Phase 2's extraction prompt/schema must enforce unit scale explicitly and Phase 3's benchmark must weight numeric-transcription accuracy, not just field presence
+- [Phase 2]: qwen3:4b cold-load latency ~90s for the first call in a session — batch/timeout design (Phase 4) should assume a slow first request per worker lifetime, not per firm
 - [Phase 5]: nanoclaw needs WSL2 and moves fast — decide nanoclaw-in-WSL2 vs Windows Task Scheduler + CLI (default: Task Scheduler + CLI) and re-research authoring against then-current version at plan time
 - [Phase 6]: Ollama prefix KV-cache reuse benefit is version-dependent — measure empirically at plan time
 - [Phase 7]: SearXNG (DISC-01, relocated from Phase 1) — run via Docker Desktop or a native metasearch fallback; decide at plan time
-- [Phase 3+]: qwen3:4b accuracy ceiling unknown until benchmark exists; qwen3:8b is the pre-agreed first escalation knob
+- [Phase 3+]: qwen3:4b accuracy ceiling unknown until full benchmark exists; qwen3:8b is the pre-agreed first escalation knob
 
 ## Deferred Items
 
@@ -91,5 +92,5 @@ Items acknowledged and carried forward from previous milestone close:
 ## Session Continuity
 
 Last session: 2026-07-19
-Stopped at: Roadmap and state initialized; ready for `/gsd-plan-phase 1`
+Stopped at: Phase 1 complete (Windows-native pivot executed and verified); ready to plan Phase 2
 Resume file: None
