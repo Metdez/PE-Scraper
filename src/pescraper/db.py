@@ -198,6 +198,25 @@ def upsert_firm(conn: sqlite3.Connection, record: FirmRecord) -> None:
     conn.commit()
 
 
+def get_firm(conn: sqlite3.Connection, website: str) -> FirmRecord | None:
+    """Read a full FirmRecord back out by website, or None if no such row.
+
+    Converts SQLite's ``status`` TEXT back to :class:`FirmStatus` and
+    ``needs_review`` INTEGER (0/1) back to ``bool`` before constructing the
+    record — the inverse of :func:`upsert_firm`'s enum/bool -> SQLite coercion.
+    """
+    row = conn.execute(
+        "SELECT * FROM firms WHERE website = ?", (website,)
+    ).fetchone()
+    if row is None:
+        return None
+
+    data = dict(row)
+    data["status"] = FirmStatus(data["status"])
+    data["needs_review"] = bool(data["needs_review"])
+    return FirmRecord(**data)
+
+
 def advance_status(
     conn: sqlite3.Connection, website: str, new_status: str | FirmStatus
 ) -> None:
@@ -251,6 +270,7 @@ __all__ = [
     "connect",
     "init_db",
     "upsert_firm",
+    "get_firm",
     "advance_status",
     "stale_firms",
 ]
