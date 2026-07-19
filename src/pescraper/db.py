@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import os
 import sqlite3
+from datetime import datetime, timezone
 from pathlib import Path
 
 from pescraper.models import FIRM_COLUMNS, FirmRecord, FirmStatus
@@ -198,6 +199,25 @@ def upsert_firm(conn: sqlite3.Connection, record: FirmRecord) -> None:
     conn.commit()
 
 
+def get_firm(conn: sqlite3.Connection, website: str) -> FirmRecord | None:
+    """Read a full FirmRecord back out by website, or None if no such row.
+
+    Converts SQLite's ``status`` TEXT back to :class:`FirmStatus` and
+    ``needs_review`` INTEGER (0/1) back to ``bool`` before constructing the
+    record — the inverse of :func:`upsert_firm`'s enum/bool -> SQLite coercion.
+    """
+    row = conn.execute(
+        "SELECT * FROM firms WHERE website = ?", (website,)
+    ).fetchone()
+    if row is None:
+        return None
+
+    data = dict(row)
+    data["status"] = FirmStatus(data["status"])
+    data["needs_review"] = bool(data["needs_review"])
+    return FirmRecord(**data)
+
+
 def advance_status(
     conn: sqlite3.Connection, website: str, new_status: str | FirmStatus
 ) -> None:
@@ -227,6 +247,52 @@ def advance_status(
     conn.commit()
 
 
+def insert_extraction(
+    conn: sqlite3.Connection,
+    *,
+    firm_website: str,
+    field: str,
+    value: str | None,
+    quote: str | None,
+    source_page_url: str | None,
+    model: str,
+    prompt_version: str,
+    content_hash: str | None,
+) -> None:
+    """Append one provenance row to ``extractions`` for a single extracted field.
+
+    Append-only log (not an upsert): one row per extraction run per field, per
+    CONTEXT.md's provenance requirement. ``source_page_url``/``quote`` may be
+    None (an unmatched/unverified field) — the row itself is still persisted
+    as the record that this field's provenance couldn't be verified.
+    Commits the transaction (crash-safe per-row write).
+    """
+    created_at = datetime.now(timezone.utc).isoformat()
+    conn.execute(
+        """
+        INSERT INTO extractions (
+            firm_website, source_page_url, field, value, quote,
+            model, prompt_version, content_hash, created_at
+        ) VALUES (
+            :firm_website, :source_page_url, :field, :value, :quote,
+            :model, :prompt_version, :content_hash, :created_at
+        )
+        """,
+        {
+            "firm_website": firm_website,
+            "source_page_url": source_page_url,
+            "field": field,
+            "value": value,
+            "quote": quote,
+            "model": model,
+            "prompt_version": prompt_version,
+            "content_hash": content_hash,
+            "created_at": created_at,
+        },
+    )
+    conn.commit()
+
+
 def stale_firms(conn: sqlite3.Connection, days: int = 90) -> list[str]:
     """Return websites of firms whose last_checked is null or older than ``days``.
 
@@ -251,6 +317,8 @@ __all__ = [
     "connect",
     "init_db",
     "upsert_firm",
+    "get_firm",
+    "insert_extraction",
     "advance_status",
     "stale_firms",
 ]

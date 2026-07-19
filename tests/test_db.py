@@ -239,3 +239,222 @@ def test_stale_firms_surfaces_old_and_never_checked(tmp_path) -> None:
         assert "https://recent.example" not in stale
     finally:
         conn.close()
+
+
+# --------------------------------------------------------------------------- #
+# Task 1 (02-02) — get_firm: read a FirmRecord back by website
+# --------------------------------------------------------------------------- #
+
+
+def test_get_firm_returns_none_for_missing_website(tmp_path) -> None:
+    from pescraper.db import connect, get_firm, init_db
+
+    db_path = tmp_path / "pipeline.db"
+    init_db(db_path)
+    conn = connect(db_path)
+    try:
+        assert get_firm(conn, "https://no-such-firm.example") is None
+    finally:
+        conn.close()
+
+
+def test_get_firm_round_trips_fully_populated_record(tmp_path) -> None:
+    from pescraper.db import connect, get_firm, init_db, upsert_firm
+    from pescraper.models import FirmRecord, FirmStatus
+
+    db_path = tmp_path / "pipeline.db"
+    init_db(db_path)
+    conn = connect(db_path)
+    try:
+        record = FirmRecord(
+            firm_name="Acme Capital",
+            type="Buyout",
+            state="NY",
+            city="New York",
+            website="https://acme.example",
+            us_investments=42,
+            rev_min_musd=10.0,
+            rev_max_musd=100.0,
+            ebitda_min_musd=2.0,
+            ebitda_max_musd=20.0,
+            ev_min_musd=5.0,
+            ev_max_musd=50.0,
+            check_min_musd=1.0,
+            check_max_musd=25.0,
+            deal_types="Buyout,Growth Equity",
+            sector_tier1="Industrials",
+            aum_musd=500.0,
+            activity="Active",
+            last_deal="2026-01-01",
+            fund_name="Acme Fund III",
+            confidence=0.85,
+            needs_review=True,
+            last_checked="2026-07-19T00:00:00+00:00",
+            status=FirmStatus.NEEDS_REVIEW,
+        )
+        upsert_firm(conn, record)
+
+        result = get_firm(conn, "https://acme.example")
+        assert result == record
+        assert isinstance(result.status, FirmStatus)
+        assert isinstance(result.needs_review, bool)
+    finally:
+        conn.close()
+
+
+def test_get_firm_round_trips_minimal_record_nulls_stay_none(tmp_path) -> None:
+    from pescraper.db import connect, get_firm, init_db, upsert_firm
+    from pescraper.models import FirmRecord, FirmStatus
+
+    db_path = tmp_path / "pipeline.db"
+    init_db(db_path)
+    conn = connect(db_path)
+    try:
+        record = FirmRecord(firm_name="Minimal Firm", website="https://minimal.example")
+        upsert_firm(conn, record)
+
+        result = get_firm(conn, "https://minimal.example")
+        assert result == record
+        assert result.rev_min_musd is None
+        assert result.ebitda_max_musd is None
+        assert result.deal_types is None
+        assert result.needs_review is False
+        assert result.status is FirmStatus.PENDING
+    finally:
+        conn.close()
+
+
+# --------------------------------------------------------------------------- #
+# Task 2 (02-02) — insert_extraction: one provenance row per extracted field
+# --------------------------------------------------------------------------- #
+
+
+def test_insert_extraction_adds_one_row_with_matching_columns(tmp_path) -> None:
+    from pescraper.db import connect, init_db, insert_extraction
+
+    db_path = tmp_path / "pipeline.db"
+    init_db(db_path)
+    conn = connect(db_path)
+    try:
+        insert_extraction(
+            conn,
+            firm_website="https://acme.example",
+            field="ebitda_min_musd",
+            value="2.0",
+            quote="EBITDA of $2M to $20M",
+            source_page_url="https://acme.example/criteria",
+            model="qwen3:4b",
+            prompt_version="v1",
+            content_hash="abc123",
+        )
+
+        rows = conn.execute("SELECT * FROM extractions").fetchall()
+        assert len(rows) == 1
+        row = rows[0]
+        assert row["firm_website"] == "https://acme.example"
+        assert row["field"] == "ebitda_min_musd"
+        assert row["value"] == "2.0"
+        assert row["quote"] == "EBITDA of $2M to $20M"
+        assert row["source_page_url"] == "https://acme.example/criteria"
+        assert row["model"] == "qwen3:4b"
+        assert row["prompt_version"] == "v1"
+        assert row["content_hash"] == "abc123"
+        assert row["created_at"]
+    finally:
+        conn.close()
+
+
+def test_insert_extraction_allows_null_source_page_url_and_quote(tmp_path) -> None:
+    from pescraper.db import connect, init_db, insert_extraction
+
+    db_path = tmp_path / "pipeline.db"
+    init_db(db_path)
+    conn = connect(db_path)
+    try:
+        insert_extraction(
+            conn,
+            firm_website="https://acme.example",
+            field="fund_name",
+            value=None,
+            quote=None,
+            source_page_url=None,
+            model="qwen3:4b",
+            prompt_version="v1",
+            content_hash=None,
+        )
+
+        rows = conn.execute("SELECT * FROM extractions").fetchall()
+        assert len(rows) == 1
+        assert rows[0]["source_page_url"] is None
+        assert rows[0]["quote"] is None
+        assert rows[0]["value"] is None
+    finally:
+        conn.close()
+
+
+def test_insert_extraction_is_append_only_not_upsert(tmp_path) -> None:
+    from pescraper.db import connect, init_db, insert_extraction
+
+    db_path = tmp_path / "pipeline.db"
+    init_db(db_path)
+    conn = connect(db_path)
+    try:
+        for _ in range(2):
+            insert_extraction(
+                conn,
+                firm_website="https://acme.example",
+                field="ebitda_min_musd",
+                value="2.0",
+                quote="EBITDA of $2M",
+                source_page_url="https://acme.example/criteria",
+                model="qwen3:4b",
+                prompt_version="v1",
+                content_hash="abc123",
+            )
+
+        rows = conn.execute(
+            "SELECT * FROM extractions WHERE firm_website = ? AND field = ?",
+            ("https://acme.example", "ebitda_min_musd"),
+        ).fetchall()
+        assert len(rows) == 2
+    finally:
+        conn.close()
+
+
+def test_insert_extraction_sql_metacharacter_values_round_trip_as_data(tmp_path) -> None:
+    """T-02-03: SQL-metacharacter-laden values must round-trip as plain data."""
+    from pescraper.db import connect, init_db, insert_extraction
+
+    db_path = tmp_path / "pipeline.db"
+    init_db(db_path)
+    conn = connect(db_path)
+    try:
+        malicious_value = "5.0'; DROP TABLE extractions; --"
+        malicious_quote = "Robert'); DROP TABLE firms;--"
+        insert_extraction(
+            conn,
+            firm_website="https://acme.example",
+            field="ebitda_min_musd",
+            value=malicious_value,
+            quote=malicious_quote,
+            source_page_url="https://acme.example/criteria",
+            model="qwen3:4b",
+            prompt_version="v1",
+            content_hash="abc123",
+        )
+
+        # Both tables must still exist and contain the literal string as data.
+        tables = {
+            r[0]
+            for r in conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table'"
+            ).fetchall()
+        }
+        assert "extractions" in tables
+        assert "firms" in tables
+
+        row = conn.execute("SELECT * FROM extractions").fetchone()
+        assert row["value"] == malicious_value
+        assert row["quote"] == malicious_quote
+    finally:
+        conn.close()
