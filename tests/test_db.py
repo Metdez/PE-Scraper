@@ -159,3 +159,83 @@ def test_connect_applies_busy_timeout_and_foreign_keys(tmp_path) -> None:
         conn.close()
     assert int(busy) == 5000
     assert int(fks) == 1
+
+
+# --------------------------------------------------------------------------- #
+# Task 3 — status lifecycle + 90-day staleness query
+# --------------------------------------------------------------------------- #
+
+
+def _iso_days_ago(days: int) -> str:
+    return (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+
+
+def test_status_lifecycle_walk_and_rejects_disallowed(tmp_path) -> None:
+    from pescraper.db import advance_status, connect, init_db, upsert_firm
+    from pescraper.models import FirmRecord, FirmStatus
+
+    db_path = tmp_path / "pipeline.db"
+    init_db(db_path)
+    conn = connect(db_path)
+    try:
+        upsert_firm(
+            conn,
+            FirmRecord(firm_name="Acme Capital", website="https://acme.example"),
+        )
+
+        def current() -> str:
+            return conn.execute(
+                "SELECT status FROM firms WHERE website = ?",
+                ("https://acme.example",),
+            ).fetchone()[0]
+
+        assert current() == FirmStatus.PENDING.value
+
+        advance_status(conn, "https://acme.example", FirmStatus.IN_PROGRESS)
+        assert current() == FirmStatus.IN_PROGRESS.value
+
+        advance_status(conn, "https://acme.example", FirmStatus.COMPLETE)
+        assert current() == FirmStatus.COMPLETE.value
+
+        # complete is terminal — complete -> pending must raise.
+        with pytest.raises(ValueError):
+            advance_status(conn, "https://acme.example", FirmStatus.PENDING)
+    finally:
+        conn.close()
+
+
+def test_stale_firms_surfaces_old_and_never_checked(tmp_path) -> None:
+    from pescraper.db import connect, init_db, stale_firms, upsert_firm
+    from pescraper.models import FirmRecord
+
+    db_path = tmp_path / "pipeline.db"
+    init_db(db_path)
+    conn = connect(db_path)
+    try:
+        upsert_firm(
+            conn,
+            FirmRecord(
+                firm_name="Old Firm",
+                website="https://old.example",
+                last_checked=_iso_days_ago(100),
+            ),
+        )
+        upsert_firm(
+            conn,
+            FirmRecord(
+                firm_name="Recent Firm",
+                website="https://recent.example",
+                last_checked=_iso_days_ago(10),
+            ),
+        )
+        upsert_firm(
+            conn,
+            FirmRecord(firm_name="Never Firm", website="https://never.example"),
+        )
+
+        stale = set(stale_firms(conn, days=90))
+        assert "https://old.example" in stale
+        assert "https://never.example" in stale
+        assert "https://recent.example" not in stale
+    finally:
+        conn.close()
