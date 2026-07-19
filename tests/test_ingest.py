@@ -137,6 +137,30 @@ def test_map_columns_covers_identity_and_range_aliases() -> None:
     assert mapping["Check Size"] == "_check_range"
 
 
+def test_map_columns_covers_capital_iq_export_aliases() -> None:
+    from pescraper.ingest import map_columns
+
+    mapping = map_columns(["Entity Name", "Web Address", "Sector Emphasis"])
+
+    assert mapping["Entity Name"] == "firm_name"
+    assert mapping["Web Address"] == "_capiq_website"
+    assert mapping["Sector Emphasis"] == "sector_tier1"
+
+
+def test_map_columns_collapses_embedded_newline_headers() -> None:
+    """Capital IQ wraps a column's unit onto a second physical line inside the
+    header cell itself -- map_columns must collapse that whitespace (including
+    the newline) before the alias lookup so these headers resolve correctly."""
+    from pescraper.ingest import map_columns
+
+    mapping = map_columns(
+        ["Assets Under Management\n($000)", "Total Investments\n(actual)"]
+    )
+
+    assert mapping["Assets Under Management\n($000)"] == "_capiq_aum_thousands"
+    assert mapping["Total Investments\n(actual)"] == "us_investments"
+
+
 # --------------------------------------------------------------------------- #
 # Task 2 — ingest_csv
 # --------------------------------------------------------------------------- #
@@ -198,6 +222,38 @@ def test_ingest_csv_inserts_two_new_firms_with_parsed_ranges(tmp_path) -> None:
     assert beta is not None
     assert beta.ebitda_min_musd == 10.0
     assert beta.ebitda_max_musd == 50.0
+
+
+def test_ingest_csv_supports_capital_iq_identity_headers_and_normalizes_website(tmp_path) -> None:
+    from pescraper import db
+    from pescraper.ingest import ingest_csv
+
+    csv_path = tmp_path / "capiq.csv"
+    with csv_path.open("w", newline="", encoding="utf-8-sig") as handle:
+        writer = csv.DictWriter(
+            handle,
+            fieldnames=["Entity Name", "Web Address", "Sector Emphasis"],
+        )
+        writer.writeheader()
+        writer.writerow(
+            {
+                "Entity Name": "Acme Capital",
+                "Web Address": "www.acme.example",
+                "Sector Emphasis": "Industrials",
+            }
+        )
+
+    conn = _connect(tmp_path)
+    summary = ingest_csv(csv_path, conn)
+
+    assert summary.rows_read == 1
+    assert summary.rows_seeded == 1
+    assert summary.rows_skipped == 0
+
+    acme = db.get_firm(conn, "https://www.acme.example")
+    assert acme is not None
+    assert acme.firm_name == "Acme Capital"
+    assert acme.sector_tier1 == "Industrials"
 
 
 def test_ingest_csv_preserves_complete_status_not_reset_to_pending(tmp_path) -> None:
@@ -314,3 +370,173 @@ def test_ingest_csv_clean_numeric_min_max_columns_take_precedence_over_range_col
     assert acme is not None
     assert acme.ebitda_min_musd == 7.0
     assert acme.ebitda_max_musd == 30.0
+
+
+def test_ingest_csv_converts_capiq_aum_thousands_to_musd(tmp_path) -> None:
+    """A Capital IQ AUM cell denominated in $000s converts to the $M scale
+    FirmRecord.aum_musd expects: "1,200,000.00" -> 1200.0."""
+    from pescraper import db
+    from pescraper.ingest import ingest_csv
+
+    csv_path = tmp_path / "capiq.csv"
+    _write_csv(
+        csv_path,
+        [
+            {
+                "Entity Name": "TR Advisors Ltd",
+                "Web Address": "www.tr-capital.com",
+                "Assets Under Management\n($000)": "1,200,000.00",
+            }
+        ],
+        fieldnames=["Entity Name", "Web Address", "Assets Under Management\n($000)"],
+    )
+
+    conn = _connect(tmp_path)
+    ingest_csv(csv_path, conn)
+
+    tr = db.get_firm(conn, "https://www.tr-capital.com")
+    assert tr is not None
+    assert tr.aum_musd == 1200.0
+
+
+def test_ingest_csv_treats_na_as_missing_for_direct_numeric_field(tmp_path) -> None:
+    """A literal "NA" cell in a direct FirmRecord field becomes null rather
+    than raising a Pydantic validation error and skipping the whole row."""
+    from pescraper import db
+    from pescraper.ingest import ingest_csv
+
+    csv_path = tmp_path / "capiq.csv"
+    _write_csv(
+        csv_path,
+        [
+            {
+                "Entity Name": "Acme Capital",
+                "Web Address": "www.acme.example",
+                "Total Investments\n(actual)": "NA",
+            }
+        ],
+        fieldnames=["Entity Name", "Web Address", "Total Investments\n(actual)"],
+    )
+
+    conn = _connect(tmp_path)
+    summary = ingest_csv(csv_path, conn)
+
+    assert summary.rows_skipped == 0
+    assert summary.rows_seeded == 1
+
+    acme = db.get_firm(conn, "https://www.acme.example")
+    assert acme is not None
+    assert acme.us_investments is None
+
+
+def test_ingest_csv_maps_total_investments_actual_to_us_investments(tmp_path) -> None:
+    """A populated "Total Investments\n(actual)" cell maps to us_investments."""
+    from pescraper import db
+    from pescraper.ingest import ingest_csv
+
+    csv_path = tmp_path / "capiq.csv"
+    _write_csv(
+        csv_path,
+        [
+            {
+                "Entity Name": "Acme Capital",
+                "Web Address": "www.acme.example",
+                "Total Investments\n(actual)": "49",
+            }
+        ],
+        fieldnames=["Entity Name", "Web Address", "Total Investments\n(actual)"],
+    )
+
+    conn = _connect(tmp_path)
+    ingest_csv(csv_path, conn)
+
+    acme = db.get_firm(conn, "https://www.acme.example")
+    assert acme is not None
+    assert acme.us_investments == 49
+
+
+def test_ingest_csv_never_writes_fund_status_to_status_field(tmp_path) -> None:
+    """A "Fund Status" column with an arbitrary non-empty value never reaches
+    FirmRecord.status -- it stays unmapped and the firm keeps FirmStatus.PENDING."""
+    from pescraper import db
+    from pescraper.ingest import ingest_csv
+    from pescraper.models import FirmStatus
+
+    csv_path = tmp_path / "capiq.csv"
+    _write_csv(
+        csv_path,
+        [
+            {
+                "Entity Name": "Acme Capital",
+                "Web Address": "www.acme.example",
+                "Fund Status": "Raising Fund IV",
+            }
+        ],
+        fieldnames=["Entity Name", "Web Address", "Fund Status"],
+    )
+
+    conn = _connect(tmp_path)
+    ingest_csv(csv_path, conn)
+
+    acme = db.get_firm(conn, "https://www.acme.example")
+    assert acme is not None
+    assert acme.status == FirmStatus.PENDING
+
+
+def test_ingest_csv_real_capital_iq_header_shape_all_fields_resolve_together(
+    tmp_path,
+) -> None:
+    """One combined row using all 12 real header columns from
+    data/capiq_test.csv, modeled on the file's actual "Borgman Capital LLC"
+    row -- confirms every new/existing alias and coercion resolves together."""
+    from pescraper import db
+    from pescraper.ingest import ingest_csv
+    from pescraper.models import FirmStatus
+
+    fieldnames = [
+        "Entity Name",
+        "Entity ID",
+        "Web Address",
+        "Year Incorporated",
+        "Assets Under Management\n($000)",
+        "Number of Company Employees\n(actual)",
+        "Total Investments\n(actual)",
+        "Total Active Investments\n(actual)",
+        "Total LTM Investments\n(actual)",
+        "Sector Emphasis",
+        "Market Cap Emphasis",
+        "Fund Status",
+    ]
+    csv_path = tmp_path / "capiq_real_shape.csv"
+    _write_csv(
+        csv_path,
+        [
+            {
+                "Entity Name": "Borgman Capital LLC",
+                "Entity ID": "10008676",
+                "Web Address": "www.borgmancapital.com",
+                "Year Incorporated": "2017",
+                "Assets Under Management\n($000)": "NA",
+                "Number of Company Employees\n(actual)": "NA",
+                "Total Investments\n(actual)": "19",
+                "Total Active Investments\n(actual)": "8",
+                "Total LTM Investments\n(actual)": "2",
+                "Sector Emphasis": "Industrials",
+                "Market Cap Emphasis": "",
+                "Fund Status": "",
+            }
+        ],
+        fieldnames=fieldnames,
+    )
+
+    conn = _connect(tmp_path)
+    ingest_csv(csv_path, conn)
+
+    borgman = db.get_firm(conn, "https://www.borgmancapital.com")
+    assert borgman is not None
+    assert borgman.firm_name == "Borgman Capital LLC"
+    assert borgman.website == "https://www.borgmancapital.com"
+    assert borgman.sector_tier1 == "Industrials"
+    assert borgman.us_investments == 19
+    assert borgman.aum_musd is None
+    assert borgman.status == FirmStatus.PENDING
