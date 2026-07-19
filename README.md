@@ -20,19 +20,22 @@ The system preserves `null` when a criterion cannot be found. It does not invent
 ## How it works
 
 ```text
-A CSV of URL's or URL
+A CSV of URLs, or a single URL
         |
         v
-SQLite queue --> Crawl4AI page selection --> cleaned page text
-                                                   |
-                                                   v
-                                         Ollama qwen3:4b
-                                                   |
-                                                   v
-                         merge + confidence + source provenance
-                                                   |
-                                                   v
-                              SQLite --> CSV + styled Excel
+Crawl the site and pull out the pages that matter
+        |
+        v
+Clean up the page text
+        |
+        v
+A local AI reads it and pulls out the investment criteria
+        |
+        v
+Score confidence, flag anything shaky, save it
+        |
+        v
+Export to CSV and a styled Excel file
 ```
 
 The crawl and extraction layers are cached, queue jobs are committed one firm at a time, and a failed firm does not stop the rest of a batch.

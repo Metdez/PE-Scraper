@@ -5,8 +5,8 @@ milestone_name: milestone
 current_phase: 7
 current_phase_name: Discovery & URL Recovery
 status: complete
-stopped_at: Milestone v1.0 complete
-last_updated: "2026-07-19T23:29:40.236Z"
+stopped_at: "Completed quick task 260719-qli: CapIQ ingest reconciliation and data load"
+last_updated: "2026-07-19T23:47:00.000Z"
 last_activity: 2026-07-19
 last_activity_desc: all phases verified
 progress:
@@ -52,12 +52,16 @@ Progress: [##########] 100%
 
 ## Blockers/Concerns
 
-blocking. Real-firm benchmark quality should continue to be expanded as hand-verified labels are collected.
+None blocking. Real-firm benchmark quality should continue to be expanded as hand-verified labels are collected.
 
-- Task 3 of quick task 260719-qli blocked: a concurrent already-running full-pipeline job (pescraper run --csv capiq_test.csv --limit 478, PIDs 35628/36176, running since 19:05) holds an active WAL connection on data/pipeline.db; an executor attempt to restore the pre-Task-3 backup via raw file copy raced with that live writer and left data/pipeline.db unreadable. Verified-intact backup at data/pipeline.db.bak-20260719-192258 (+wal/shm). User must resolve the concurrent job before Task 3's ingest_csv retry.
+### Quick Tasks Completed
+
+| # | Description | Date | Commit | Directory |
+|---|-------------|------|--------|-----------|
+| 260719-qli | Reconcile ingest.py column mapper for real CapIQ export and ingest data/capiq_test.csv | 2026-07-19 | 0ceb319 | [260719-qli-reconcile-ingest-py-column-mapper-for-re](./quick/260719-qli-reconcile-ingest-py-column-mapper-for-re/) |
 
 ## Session Continuity
 
-Last session: 2026-07-19
-Stopped at: Milestone v1.0 complete
-Resume file: None
+Last session: 2026-07-19T23:47:00.000Z
+Stopped at: Completed quick task 260719-qli — data/pipeline.db seeded from the real 472-row Capital IQ export (515 total firms, integrity verified)
+Resume file: .planning/quick/260719-qli-reconcile-ingest-py-column-mapper-for-re/260719-qli-SUMMARY.md
