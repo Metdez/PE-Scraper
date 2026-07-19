@@ -1,10 +1,10 @@
 """Capital IQ CSV seed ingest — column mapper, free-text range regex, orchestrator.
 
-Per 02-CONTEXT.md ("Capital IQ Seeding & Merge Rules"), the real Capital IQ
-export is not yet available. This module is built against the documented
-expected 24-column-aligned shape with a flexible, case-insensitive column
-mapper; reconciliation against the actual export format is deferred until the
-user supplies it (not blocking).
+Per 02-CONTEXT.md ("Capital IQ Seeding & Merge Rules"), this module is built
+with a flexible, case-insensitive column mapper. ``COLUMN_ALIASES`` covers both
+the originally-assumed shape and the verified real Capital IQ export headers
+(reconciled against ``data/capiq_test.csv``), including its embedded-newline
+"Assets Under Management\n($000)" / "Total Investments\n(actual)" headers.
 
 Two responsibilities:
 
@@ -108,6 +108,13 @@ def parse_range(cell: str | None) -> tuple[float | None, float | None]:
 # Column mapper
 # --------------------------------------------------------------------------- #
 
+# Cells whose stripped, case-folded value mean "missing" across the whole
+# ingest pipeline -- both the direct-field coercion pass in ingest_csv and the
+# _capiq_website/_capiq_aum_thousands pseudo-key normalization blocks share
+# this single sentinel set so "NA"/"N/A" (Capital IQ's missing-value
+# convention) and plain empty string are never duplicated as inline literals.
+_MISSING_SENTINELS: frozenset[str] = frozenset({"", "na", "n/a"})
+
 # Known header aliases, per RESEARCH.md Pattern 7, extended with a reasonable
 # alias set (Claude's discretion per CONTEXT.md) covering identity, location,
 # classification, AUM, and the four free-text range columns. Range columns
@@ -119,10 +126,15 @@ COLUMN_ALIASES: dict[str, str] = {
     "firm": "firm_name",
     "company": "firm_name",
     "company name": "firm_name",
+    "entity name": "firm_name",
     "website": "website",
     "url": "website",
     "web site": "website",
     "web": "website",
+    # Capital IQ exports bare domains in this column. Route it through a
+    # dedicated pseudo-key so ingest_csv can add the URL scheme without
+    # changing the established behavior of generic Website/URL columns.
+    "web address": "_capiq_website",
     # Location
     "state": "state",
     "hq state": "state",
@@ -133,6 +145,7 @@ COLUMN_ALIASES: dict[str, str] = {
     "firm type": "type",
     "sector": "sector_tier1",
     "sector tier 1": "sector_tier1",
+    "sector emphasis": "sector_tier1",
     "industry": "sector_tier1",
     "deal type": "deal_types",
     "deal types": "deal_types",
@@ -140,6 +153,15 @@ COLUMN_ALIASES: dict[str, str] = {
     "aum": "aum_musd",
     "aum ($m)": "aum_musd",
     "aum musd": "aum_musd",
+    # Capital IQ reports AUM in $000s under a header that wraps its unit onto
+    # a second line inside the cell itself. Routed through a pseudo-key (like
+    # _capiq_website above) because the $000s -> $M scale conversion is more
+    # than the generic direct-field pass can apply.
+    "assets under management ($000)": "_capiq_aum_thousands",
+    # Capital IQ's investment-count header wraps its unit onto a second line
+    # ("(actual)"); needs no transform beyond NA-as-null coercion since
+    # Pydantic already coerces a numeric string like "49" to int.
+    "total investments (actual)": "us_investments",
     # Free-text range pseudo-keys (routed through parse_range by ingest_csv)
     "rev range": "_rev_range",
     "revenue range": "_rev_range",
@@ -163,15 +185,27 @@ _RANGE_KEY_TO_FIELDS: dict[str, tuple[str, str]] = {
 }
 
 
+# Collapses one-or-more whitespace characters (including embedded newlines)
+# to a single space. Capital IQ wraps a column's unit onto a second physical
+# line inside the header cell itself (e.g. "Assets Under Management\n($000)"),
+# so a plain .strip().lower() never produces a string a single-line alias key
+# can match -- this normalization is applied generally, not special-cased to
+# any particular header.
+_WHITESPACE_RUN_RE = re.compile(r"\s+")
+
+
 def map_columns(header: list[str]) -> dict[str, str]:
     """Map a CSV header row to normalized internal keys.
 
-    Case-insensitive lookup via ``COLUMN_ALIASES``; an unrecognized header
-    passes through as its own lowercased/stripped key rather than raising or
-    being silently dropped (Claude's discretion per CONTEXT.md) -- this keeps
-    future real-CSV reconciliation additive rather than a rewrite.
+    Each header is stripped, lowercased, and whitespace-collapsed (internal
+    runs of whitespace -- including embedded newlines -- become a single
+    space) before the case-insensitive ``COLUMN_ALIASES`` lookup. An
+    unrecognized header passes through as its own normalized key rather than
+    raising or being silently dropped (Claude's discretion per CONTEXT.md) --
+    this keeps future real-CSV reconciliation additive rather than a rewrite.
     """
-    return {h: COLUMN_ALIASES.get(h.strip().lower(), h.strip().lower()) for h in header}
+    normalized_headers = {h: _WHITESPACE_RUN_RE.sub(" ", h.strip().lower()) for h in header}
+    return {h: COLUMN_ALIASES.get(norm, norm) for h, norm in normalized_headers.items()}
 
 
 # --------------------------------------------------------------------------- #
@@ -208,7 +242,9 @@ def ingest_csv(csv_path: str | Path, conn: sqlite3.Connection) -> IngestSummary:
     summary = IngestSummary()
     path = Path(csv_path)
 
-    with path.open(newline="", encoding="utf-8") as f:
+    # ``utf-8-sig`` accepts ordinary UTF-8 and strips the BOM emitted by
+    # Capital IQ exports, keeping the first header (Entity Name) matchable.
+    with path.open(newline="", encoding="utf-8-sig") as f:
         reader = csv.DictReader(f)
         if reader.fieldnames is None:
             return summary
@@ -229,13 +265,21 @@ def ingest_csv(csv_path: str | Path, conn: sqlite3.Connection) -> IngestSummary:
 
             # First pass: direct FirmRecord-field columns (includes clean
             # numeric *_min_musd/*_max_musd columns, if the CSV supplies them).
+            # A cell whose stripped value case-insensitively matches
+            # _MISSING_SENTINELS (empty string, or Capital IQ's "NA"/"N/A"
+            # missing-value convention) becomes None before it ever reaches
+            # FirmRecord(**field_values) -- otherwise a literal "NA" in a
+            # numeric column raises a Pydantic validation error and silently
+            # drops the whole row.
             for key, raw_value in normalized.items():
                 if key.startswith("_"):
                     continue  # range pseudo-keys handled in the second pass
                 if key not in FirmRecord.model_fields:
                     continue  # not part of the 24-column schema -- ignore
                 value = raw_value.strip() if isinstance(raw_value, str) else raw_value
-                field_values[key] = value if value not in (None, "") else None
+                if isinstance(value, str) and value.casefold() in _MISSING_SENTINELS:
+                    value = None
+                field_values[key] = value
 
             # Second pass: free-text range pseudo-keys -- only fill a
             # min/max pair not already populated directly above (clean
@@ -250,6 +294,33 @@ def ingest_csv(csv_path: str | Path, conn: sqlite3.Connection) -> IngestSummary:
                     field_values[min_field] = lo
                 if hi is not None:
                     field_values[max_field] = hi
+
+            # Capital IQ's Web Address values are commonly `www.example.com`
+            # or `example.com`. Crawl4AI requires an absolute URL, so normalize
+            # only this source-specific alias while preserving generic CSV
+            # website values exactly as before.
+            capiq_website = normalized.get("_capiq_website", "").strip()
+            if not field_values.get("website") and capiq_website.casefold() not in _MISSING_SENTINELS:
+                if "://" not in capiq_website:
+                    capiq_website = f"https://{capiq_website}"
+                field_values["website"] = capiq_website
+
+            # Capital IQ's AUM is denominated in $000s under the
+            # _capiq_aum_thousands pseudo-key; FirmRecord.aum_musd expects the
+            # $M scale, so divide by 1000 after stripping thousands-separator
+            # commas. Only applied when a clean aum_musd column hasn't
+            # already populated the field directly, and skipped entirely when
+            # the raw cell is a missing sentinel. A malformed cell degrades
+            # to a missing value rather than raising.
+            aum_thousands = normalized.get("_capiq_aum_thousands", "").strip()
+            if (
+                field_values.get("aum_musd") is None
+                and aum_thousands.casefold() not in _MISSING_SENTINELS
+            ):
+                try:
+                    field_values["aum_musd"] = float(aum_thousands.replace(",", "")) / 1000.0
+                except ValueError:
+                    pass
 
             firm_name = field_values.get("firm_name")
             website = field_values.get("website")
