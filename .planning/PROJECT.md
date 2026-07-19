@@ -12,7 +12,8 @@ Turn a raw list of PE firm URLs into an accurate, continuously self-updating, ex
 
 ### Validated
 
-(None yet — ship to validate)
+- [x] Windows-native runtime seams (ENVR-01) — Ollama qwen3:4b structured-output round-trip on `localhost:11434`, Crawl4AI/Playwright Chromium launch, asyncio Proactor + UTF-8 — Validated in Phase 1
+- [x] `pipeline.db` SQLite contract (DATA-02) — WAL, 5 tables, fixed 24-column firms schema, status lifecycle, 90-day staleness — Validated in Phase 1
 
 ### Active
 
@@ -83,5 +84,9 @@ This document evolves at phase transitions and milestone boundaries.
 3. Audit Out of Scope — reasons still valid?
 4. Update Context with current state
 
+## Current State
+
+Phase 1 complete — Windows-native runtime verified (Ollama qwen3:4b, Crawl4AI/Playwright, Proactor+UTF-8) and the `pipeline.db` SQLite contract (24-col firms schema, status lifecycle, staleness) exists. `pescraper` CLI skeleton runs. Next: Phase 2 proves qwen3:4b extraction quality end-to-end on a single firm.
+
 ---
-*Last updated: 2026-07-19 after initialization*
+*Last updated: 2026-07-19 after Phase 1 completion*
