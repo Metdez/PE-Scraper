@@ -21,6 +21,20 @@ import os
 import sys
 
 
+def crawl4ai_browser_kwargs() -> dict[str, object]:
+    """Return the platform-safe Crawl4AI browser launch options.
+
+    Playwright's separate Chromium headless-shell bundle is not reliable in
+    this Windows-native stack. Windows 11 includes Microsoft Edge, so use its
+    supported Playwright channel there. Other platforms retain Playwright's
+    bundled Chromium default.
+    """
+    options: dict[str, object] = {"headless": True}
+    if sys.platform == "win32":
+        options["chrome_channel"] = "msedge"
+    return options
+
+
 def configure_windows_runtime() -> dict[str, object]:
     """Harden the process runtime for Windows-native operation.
 

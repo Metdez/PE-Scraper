@@ -41,3 +41,18 @@ def test_configure_is_idempotent() -> None:
     assert _normalize(first["stdout_encoding"]) == "utf8"
     if sys.platform == "win32":
         assert first["event_loop_policy"] == "WindowsProactorEventLoopPolicy"
+
+
+def test_crawl4ai_browser_kwargs_use_installed_edge_on_windows(monkeypatch) -> None:
+    monkeypatch.setattr(pescraper.runtime.sys, "platform", "win32")
+
+    assert pescraper.runtime.crawl4ai_browser_kwargs() == {
+        "headless": True,
+        "chrome_channel": "msedge",
+    }
+
+
+def test_crawl4ai_browser_kwargs_keep_playwright_default_off_windows(monkeypatch) -> None:
+    monkeypatch.setattr(pescraper.runtime.sys, "platform", "linux")
+
+    assert pescraper.runtime.crawl4ai_browser_kwargs() == {"headless": True}

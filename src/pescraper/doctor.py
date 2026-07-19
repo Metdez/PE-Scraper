@@ -41,6 +41,7 @@ from pydantic import BaseModel
 # as an import side effect, so every entry point that reaches this module runs under
 # the hardened runtime before any check executes.
 import pescraper  # noqa: F401
+from pescraper.runtime import crawl4ai_browser_kwargs
 
 
 @dataclass
@@ -169,7 +170,7 @@ async def _launch_chromium_once() -> tuple[bool, str]:
         "<html><head><meta charset='utf-8'><title>pescraper doctor</title></head>"
         "<body><h1>pescraper doctor</h1><p>chromium launch ok</p></body></html>"
     )
-    async with AsyncWebCrawler(config=BrowserConfig(headless=True)) as crawler:
+    async with AsyncWebCrawler(config=BrowserConfig(**crawl4ai_browser_kwargs())) as crawler:
         result = await crawler.arun(url="raw://" + html)
     return bool(result.success), (result.error_message or "").strip()
 

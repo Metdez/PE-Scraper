@@ -21,10 +21,10 @@ from __future__ import annotations
 import logging
 
 import tenacity
-from crawl4ai import AsyncWebCrawler, CacheMode, CrawlerRunConfig
+from crawl4ai import AsyncWebCrawler, BrowserConfig, CacheMode, CrawlerRunConfig
 from crawl4ai.adaptive_crawler import AdaptiveConfig, AdaptiveCrawler
 
-from pescraper import decongest
+from pescraper import decongest, runtime
 
 logger = logging.getLogger(__name__)
 
@@ -76,7 +76,8 @@ async def select_pages(url: str) -> dict[str, str]:
             strategy="statistical",
         )
 
-        async with AsyncWebCrawler() as crawler:
+        browser_config = BrowserConfig(**runtime.crawl4ai_browser_kwargs())
+        async with AsyncWebCrawler(config=browser_config) as crawler:
             adaptive = AdaptiveCrawler(crawler, config=config)
 
             state = None
